@@ -1,0 +1,27 @@
+New-Item -Path ".gitignore" -ItemType File
+```
+
+Then open it in VS Code and add this content to `TcgApp/.gitignore`:
+```
+# Environment files
+.env
+backend/.env
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
