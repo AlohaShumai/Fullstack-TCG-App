@@ -71,7 +71,10 @@ export default function Decks() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <p className="text-white text-xl">Loading decks...</p>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-white text-xl">Loading decks...</p>
+        </div>
       </div>
     );
   }
@@ -79,26 +82,26 @@ export default function Decks() {
   return (
     <div className="min-h-screen bg-gray-900">
       <nav className="bg-gray-800 p-4">
-        <div className="container mx-auto flex justify-between items-center">
+        <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
           <Link to="/" className="text-2xl font-bold text-white">TCG App</Link>
         </div>
       </nav>
 
-      <div className="container mx-auto p-8">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-3xl font-bold text-white">My Decks</h2>
+      <div className="container mx-auto p-4 sm:p-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <h2 className="text-2xl sm:text-3xl font-bold text-white">My Decks</h2>
           <button
             onClick={() => setShowCreateForm(true)}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded transition"
+            className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded transition"
           >
             + New Deck
           </button>
         </div>
 
         {showCreateForm && (
-          <div className="bg-gray-800 rounded-lg p-6 mb-6">
+          <div className="bg-gray-800 rounded-lg p-4 sm:p-6 mb-6">
             <h3 className="text-xl font-bold text-white mb-4">Create New Deck</h3>
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-4">
               <input
                 type="text"
                 placeholder="Deck name..."
@@ -106,18 +109,20 @@ export default function Decks() {
                 onChange={(e) => setNewDeckName(e.target.value)}
                 className="flex-1 p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-purple-500 focus:outline-none"
               />
-              <button
-                onClick={createDeck}
-                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded transition"
-              >
-                Create
-              </button>
-              <button
-                onClick={() => setShowCreateForm(false)}
-                className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded transition"
-              >
-                Cancel
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={createDeck}
+                  className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded transition"
+                >
+                  Create
+                </button>
+                <button
+                  onClick={() => setShowCreateForm(false)}
+                  className="flex-1 sm:flex-none bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded transition"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -127,15 +132,15 @@ export default function Decks() {
             <p className="text-gray-400 mb-4">You don't have any decks yet.</p>
             <button
               onClick={() => setShowCreateForm(true)}
-              className="text-purple-400 hover:underline"
+              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition"
             >
               Create your first deck!
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {decks.map(deck => (
-              <div key={deck.id} className="bg-gray-800 rounded-lg p-6">
+              <div key={deck.id} className="bg-gray-800 rounded-lg p-4 sm:p-6">
                 <div className="flex justify-between items-start mb-4">
                   <h3 className="text-xl font-bold text-purple-400">{deck.name}</h3>
                   <button
@@ -145,24 +150,39 @@ export default function Decks() {
                     Delete
                   </button>
                 </div>
-                <p className="text-gray-400 mb-4">
-                  {getTotalCards(deck)} / 60 cards
-                </p>
-                <div className="flex gap-2 mb-4">
-                  {deck.cards.slice(0, 4).map(deckCard => (
+                
+                <div className="mb-4">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-400">Cards</span>
+                    <span className="text-white">{getTotalCards(deck)} / 60</span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full ${getTotalCards(deck) === 60 ? 'bg-green-500' : 'bg-purple-500'}`}
+                      style={{ width: `${Math.min((getTotalCards(deck) / 60) * 100, 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                <div className="flex gap-1 mb-4 overflow-hidden">
+                  {deck.cards.slice(0, 5).map(deckCard => (
                     <img
                       key={deckCard.id}
                       src={deckCard.card.imageSmall}
                       alt={deckCard.card.name}
-                      className="w-12 h-auto rounded"
+                      className="w-10 sm:w-12 h-auto rounded"
                     />
                   ))}
-                  {deck.cards.length > 4 && (
-                    <div className="w-12 h-16 bg-gray-700 rounded flex items-center justify-center text-gray-400 text-sm">
-                      +{deck.cards.length - 4}
+                  {deck.cards.length > 5 && (
+                    <div className="w-10 sm:w-12 h-14 sm:h-16 bg-gray-700 rounded flex items-center justify-center text-gray-400 text-xs">
+                      +{deck.cards.length - 5}
                     </div>
                   )}
+                  {deck.cards.length === 0 && (
+                    <p className="text-gray-500 text-sm">No cards yet</p>
+                  )}
                 </div>
+
                 <Link
                   to={`/decks/${deck.id}`}
                   className="block text-center bg-purple-600 hover:bg-purple-700 text-white py-2 rounded transition"

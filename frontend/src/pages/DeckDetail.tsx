@@ -5,8 +5,9 @@ import api from '../services/api';
 interface Card {
   id: string;
   name: string;
-  supertype: string;
   imageSmall: string;
+  supertype: string;
+  types: string[];
 }
 
 interface DeckCard {
@@ -24,20 +25,30 @@ interface Deck {
 
 interface ValidationResult {
   valid: boolean;
-  totalCards: number;
   errors: string[];
 }
 
 export default function DeckDetail() {
   const { deckId } = useParams<{ deckId: string }>();
   const [deck, setDeck] = useState<Deck | null>(null);
-  const [allCards, setAllCards] = useState<Card[]>([]);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [allCards, setAllCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddCard, setShowAddCard] = useState(false);
   const [search, setSearch] = useState('');
+  const [showAddCards, setShowAddCards] = useState(false);
 
-  const validateDeck = useCallback(async () => {
+  const fetchDeck = useCallback(async () => {
+    try {
+      const response = await api.get(`/decks/${deckId}`);
+      setDeck(response.data);
+    } catch (error) {
+      console.error('Failed to fetch deck:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [deckId]);
+
+  const fetchValidation = useCallback(async () => {
     try {
       const response = await api.get(`/decks/${deckId}/validate`);
       setValidation(response.data);
@@ -46,39 +57,28 @@ export default function DeckDetail() {
     }
   }, [deckId]);
 
-  const fetchDeck = useCallback(async () => {
+  const fetchAllCards = async () => {
     try {
-      const response = await api.get(`/decks/${deckId}`);
-      setDeck(response.data);
-      validateDeck();
+      const response = await api.get('/cards');
+      setAllCards(response.data);
     } catch (error) {
-      console.error('Failed to fetch deck:', error);
-    } finally {
-      setLoading(false);
+      console.error('Failed to fetch cards:', error);
     }
-  }, [deckId, validateDeck]);
+  };
 
   useEffect(() => {
-    const fetchAllCards = async () => {
-      try {
-        const response = await api.get('/cards');
-        setAllCards(response.data);
-      } catch (error) {
-        console.error('Failed to fetch cards:', error);
-      }
-    };
-
     fetchDeck();
+    fetchValidation();
     fetchAllCards();
-  }, [fetchDeck]);
+  }, [fetchDeck, fetchValidation]);
 
   const addCardToDeck = async (cardId: string) => {
     try {
       await api.post(`/decks/${deckId}/cards`, { cardId, quantity: 1 });
       fetchDeck();
+      fetchValidation();
     } catch (error) {
       console.error('Failed to add card:', error);
-      alert('Failed to add card. Check deck rules (max 4 copies, 60 cards total).');
     }
   };
 
@@ -90,10 +90,15 @@ export default function DeckDetail() {
         await api.patch(`/decks/${deckId}/cards/${cardId}`, { quantity });
       }
       fetchDeck();
+      fetchValidation();
     } catch (error) {
       console.error('Failed to update card:', error);
-      alert('Failed to update. Check deck rules.');
     }
+  };
+
+  const getTotalCards = () => {
+    if (!deck) return 0;
+    return deck.cards.reduce((sum, card) => sum + card.quantity, 0);
   };
 
   const filteredCards = allCards.filter(card =>
@@ -103,7 +108,10 @@ export default function DeckDetail() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <p className="text-white text-xl">Loading deck...</p>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-white text-xl">Loading deck...</p>
+        </div>
       </div>
     );
   }
@@ -111,50 +119,59 @@ export default function DeckDetail() {
   if (!deck) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <p className="text-white text-xl">Deck not found</p>
+        <div className="text-center">
+          <p className="text-white text-xl mb-4">Deck not found</p>
+          <Link to="/decks" className="text-purple-400 hover:underline">Back to decks</Link>
+        </div>
       </div>
     );
   }
 
-  const totalCards = deck.cards.reduce((sum, c) => sum + c.quantity, 0);
-
   return (
     <div className="min-h-screen bg-gray-900">
       <nav className="bg-gray-800 p-4">
-        <div className="container mx-auto flex justify-between items-center">
+        <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
           <Link to="/" className="text-2xl font-bold text-white">TCG App</Link>
-          <Link to="/decks" className="text-gray-400 hover:text-white">← Back to Decks</Link>
+          <Link to="/decks" className="text-purple-400 hover:text-purple-300">← Back to Decks</Link>
         </div>
       </nav>
 
-      <div className="container mx-auto p-8">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h2 className="text-3xl font-bold text-white">{deck.name}</h2>
-            <p className="text-gray-400">{totalCards} / 60 cards</p>
-          </div>
+      <div className="container mx-auto p-4 sm:p-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <h2 className="text-2xl sm:text-3xl font-bold text-white">{deck.name}</h2>
           <button
-            onClick={() => setShowAddCard(!showAddCard)}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded transition"
+            onClick={() => setShowAddCards(!showAddCards)}
+            className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded transition"
           >
-            {showAddCard ? 'Close' : '+ Add Cards'}
+            {showAddCards ? 'Hide Cards' : '+ Add Cards'}
           </button>
         </div>
 
-        {validation && (
-          <div className={`rounded-lg p-4 mb-6 ${validation.valid ? 'bg-green-900' : 'bg-yellow-900'}`}>
-            <p className={`font-bold ${validation.valid ? 'text-green-400' : 'text-yellow-400'}`}>
-              {validation.valid ? '✓ Deck is valid!' : '⚠ Deck needs work'}
-            </p>
-            {validation.errors.map((error, i) => (
-              <p key={i} className="text-yellow-300 text-sm">{error}</p>
-            ))}
+        {/* Validation Status */}
+        <div className={`rounded-lg p-4 mb-6 ${validation?.valid ? 'bg-green-900' : 'bg-yellow-900'}`}>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <div className="flex items-center gap-2">
+              <span className={`text-2xl ${validation?.valid ? 'text-green-400' : 'text-yellow-400'}`}>
+                {validation?.valid ? '✓' : '⚠'}
+              </span>
+              <span className="text-white font-bold">
+                {getTotalCards()} / 60 cards
+              </span>
+            </div>
+            {validation && !validation.valid && (
+              <div className="text-yellow-300 text-sm">
+                {validation.errors.map((err, i) => (
+                  <p key={i}>{err}</p>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
-        {showAddCard && (
-          <div className="bg-gray-800 rounded-lg p-6 mb-6">
-            <h3 className="text-xl font-bold text-white mb-4">Add Cards</h3>
+        {/* Add Cards Panel */}
+        {showAddCards && (
+          <div className="bg-gray-800 rounded-lg p-4 mb-6">
+            <h3 className="text-xl font-bold text-white mb-4">Add Cards to Deck</h3>
             <input
               type="text"
               placeholder="Search cards..."
@@ -162,52 +179,71 @@ export default function DeckDetail() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-green-500 focus:outline-none mb-4"
             />
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-3 max-h-64 overflow-y-auto">
-              {filteredCards.map(card => (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-64 overflow-y-auto">
+              {filteredCards.slice(0, 50).map(card => (
                 <div
                   key={card.id}
                   onClick={() => addCardToDeck(card.id)}
                   className="cursor-pointer hover:opacity-75 transition"
                 >
-                  <img src={card.imageSmall} alt={card.name} className="w-full rounded" />
+                  <img
+                    src={card.imageSmall}
+                    alt={card.name}
+                    className="w-full rounded"
+                  />
                 </div>
               ))}
             </div>
+            {filteredCards.length > 50 && (
+              <p className="text-gray-400 text-sm mt-2">Showing 50 of {filteredCards.length} cards. Refine your search.</p>
+            )}
           </div>
         )}
 
-        <h3 className="text-xl font-bold text-white mb-4">Deck Cards</h3>
-        {deck.cards.length === 0 ? (
-          <p className="text-gray-400">No cards in this deck yet. Add some above!</p>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {deck.cards.map(deckCard => (
-              <div key={deckCard.id} className="bg-gray-800 rounded-lg p-3">
-                <img
-                  src={deckCard.card.imageSmall}
-                  alt={deckCard.card.name}
-                  className="w-full rounded mb-2"
-                />
-                <h4 className="text-white font-semibold text-sm truncate">{deckCard.card.name}</h4>
-                <div className="flex items-center justify-between mt-2">
-                  <button
-                    onClick={() => updateCardQuantity(deckCard.cardId, deckCard.quantity - 1)}
-                    className="bg-red-600 hover:bg-red-700 text-white w-8 h-8 rounded"
-                  >
-                    -
-                  </button>
-                  <span className="text-white font-bold">{deckCard.quantity}</span>
-                  <button
-                    onClick={() => updateCardQuantity(deckCard.cardId, deckCard.quantity + 1)}
-                    className="bg-green-600 hover:bg-green-700 text-white w-8 h-8 rounded"
-                  >
-                    +
-                  </button>
+        {/* Deck Cards */}
+        <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
+          <h3 className="text-xl font-bold text-white mb-4">Deck Contents</h3>
+          
+          {deck.cards.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-400 mb-4">No cards in this deck yet.</p>
+              <button
+                onClick={() => setShowAddCards(true)}
+                className="text-green-400 hover:underline"
+              >
+                Add some cards!
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {deck.cards.map(deckCard => (
+                <div key={deckCard.id} className="bg-gray-700 rounded-lg p-2">
+                  <img
+                    src={deckCard.card.imageSmall}
+                    alt={deckCard.card.name}
+                    className="w-full rounded mb-2"
+                  />
+                  <p className="text-white text-xs sm:text-sm truncate mb-2">{deckCard.card.name}</p>
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => updateCardQuantity(deckCard.cardId, deckCard.quantity - 1)}
+                      className="bg-red-600 hover:bg-red-700 text-white w-7 h-7 rounded text-sm"
+                    >
+                      -
+                    </button>
+                    <span className="text-white font-bold">{deckCard.quantity}</span>
+                    <button
+                      onClick={() => updateCardQuantity(deckCard.cardId, deckCard.quantity + 1)}
+                      className="bg-green-600 hover:bg-green-700 text-white w-7 h-7 rounded text-sm"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
