@@ -6,7 +6,7 @@ import { CardsController } from './cards.controller';
 @Module({
   imports: [
     HttpModule.register({
-      timeout: 60000,
+      timeout: 180000,
       maxRedirects: 5,
     }),
   ],

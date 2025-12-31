@@ -37,4 +37,27 @@ export class CardsController {
     const pageCount = pages ? parseInt(pages, 10) : 1;
     return this.cardsService.syncCards(pageCount);
   }
+
+  @Post('sync/standard')
+  @UseGuards(JwtAuthGuard)
+  async syncStandard(@Query('pages') pages?: string) {
+    const pageCount = pages ? parseInt(pages, 10) : 5;
+    return this.cardsService.syncStandardLegal(pageCount);
+  }
+
+  @Post('sync/expanded')
+  @UseGuards(JwtAuthGuard)
+  async syncExpanded(@Query('pages') pages?: string) {
+    const pageCount = pages ? parseInt(pages, 10) : 5;
+    return this.cardsService.syncExpandedLegal(pageCount);
+  }
+
+  @Post('sync/set')
+  @UseGuards(JwtAuthGuard)
+  async syncSet(@Query('name') setName: string) {
+    if (!setName) {
+      return { error: 'Set name is required. Use ?name=SetName' };
+    }
+    return this.cardsService.syncSet(setName);
+  }
 }

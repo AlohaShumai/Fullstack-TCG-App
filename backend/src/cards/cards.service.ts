@@ -70,37 +70,148 @@ export class CardsService {
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleDailySync() {
     this.logger.log('Starting scheduled card sync...');
-    await this.syncCards(1);
+    await this.syncStandardLegal(5);
     this.logger.log('Scheduled card sync completed');
   }
 
   async syncCards(pages: number = 1): Promise<{ synced: number }> {
     let totalSynced = 0;
+    const apiKey = this.configService.get<string>('POKEMON_TCG_API_KEY');
 
     for (let page = 1; page <= pages; page++) {
       this.logger.log(`Fetching page ${page}...`);
-
-      const apiKey = this.configService.get<string>('POKEMON_TCG_API_KEY');
 
       const response = await firstValueFrom(
         this.httpService.get<ApiResponse>(`${this.apiUrl}/cards`, {
           params: {
             page,
             pageSize: 250,
+            orderBy: '-set.releaseDate',
           },
           headers: apiKey ? { 'X-Api-Key': apiKey } : {},
         }),
       );
 
       const cards = response.data.data;
-      this.logger.log(`Retrieved ${cards.length} cards from page ${page}`);
+      this.logger.log(`Retrieved ${cards.length} cards`);
 
       for (const card of cards) {
         await this.upsertCard(card);
         totalSynced++;
       }
 
-      this.logger.log(`Page ${page} complete. Total synced: ${totalSynced}`);
+      this.logger.log(`Page ${page} complete. Total: ${totalSynced}`);
+    }
+
+    return { synced: totalSynced };
+  }
+
+  async syncStandardLegal(pages: number = 5): Promise<{ synced: number }> {
+    let totalSynced = 0;
+    const apiKey = this.configService.get<string>('POKEMON_TCG_API_KEY');
+
+    for (let page = 1; page <= pages; page++) {
+      this.logger.log(`Fetching Standard-legal cards (page ${page})...`);
+
+      try {
+        const response = await firstValueFrom(
+          this.httpService.get<ApiResponse>(`${this.apiUrl}/cards`, {
+            params: {
+              page,
+              pageSize: 250,
+              q: 'legalities.standard:legal',
+              orderBy: '-set.releaseDate',
+            },
+            headers: apiKey ? { 'X-Api-Key': apiKey } : {},
+          }),
+        );
+
+        const cards = response.data.data;
+        this.logger.log(`Retrieved ${cards.length} Standard cards`);
+
+        for (const card of cards) {
+          await this.upsertCard(card);
+          totalSynced++;
+        }
+
+        this.logger.log(`Page ${page} complete. Total: ${totalSynced}`);
+        // Wait 2 seconds between pages to avoid rate limiting
+        if (page < pages) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      } catch (error) {
+        this.logger.error(`Error on page ${page}: ${error}`);
+        // Continue to next page instead of failing completely
+        continue;
+      }
+    }
+
+    return { synced: totalSynced };
+  }
+
+  async syncExpandedLegal(pages: number = 5): Promise<{ synced: number }> {
+    let totalSynced = 0;
+    const apiKey = this.configService.get<string>('POKEMON_TCG_API_KEY');
+
+    for (let page = 1; page <= pages; page++) {
+      this.logger.log(`Fetching Expanded-legal cards (page ${page})...`);
+
+      const response = await firstValueFrom(
+        this.httpService.get<ApiResponse>(`${this.apiUrl}/cards`, {
+          params: {
+            page,
+            pageSize: 250,
+            q: 'legalities.expanded:legal',
+            orderBy: '-set.releaseDate',
+          },
+          headers: apiKey ? { 'X-Api-Key': apiKey } : {},
+        }),
+      );
+
+      const cards = response.data.data;
+      this.logger.log(`Retrieved ${cards.length} Expanded cards`);
+
+      for (const card of cards) {
+        await this.upsertCard(card);
+        totalSynced++;
+      }
+
+      this.logger.log(`Page ${page} complete. Total: ${totalSynced}`);
+    }
+
+    return { synced: totalSynced };
+  }
+
+  async syncSet(setName: string): Promise<{ synced: number }> {
+    let totalSynced = 0;
+    let page = 1;
+    let hasMore = true;
+    const apiKey = this.configService.get<string>('POKEMON_TCG_API_KEY');
+
+    this.logger.log(`Syncing set: ${setName}`);
+
+    while (hasMore) {
+      const response = await firstValueFrom(
+        this.httpService.get<ApiResponse>(`${this.apiUrl}/cards`, {
+          params: {
+            page,
+            pageSize: 250,
+            q: `set.name:"${setName}"`,
+          },
+          headers: apiKey ? { 'X-Api-Key': apiKey } : {},
+        }),
+      );
+
+      const cards = response.data.data;
+      this.logger.log(`Retrieved ${cards.length} cards from ${setName}`);
+
+      for (const card of cards) {
+        await this.upsertCard(card);
+        totalSynced++;
+      }
+
+      hasMore = cards.length === 250;
+      page++;
     }
 
     return { synced: totalSynced };
@@ -160,7 +271,7 @@ export class CardsService {
   async getAllCards() {
     return this.prisma.card.findMany({
       take: 100,
-      orderBy: { name: 'asc' },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
