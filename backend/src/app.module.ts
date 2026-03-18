@@ -8,6 +8,7 @@ import { CardsModule } from './cards/cards.module';
 import { CollectionsModule } from './collections/collections.module';
 import { DecksModule } from './decks/decks.module';
 import { RagModule } from './rag/rag.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RagModule } from './rag/rag.module';
     CollectionsModule,
     DecksModule,
     RagModule,
+    AiModule,
   ],
 })
 export class AppModule {}

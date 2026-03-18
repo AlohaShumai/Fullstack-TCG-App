@@ -1,15 +1,34 @@
-import { IsString, IsInt, Min, Max, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  Min,
+  Max,
+  MinLength,
+  IsOptional,
+  IsIn,
+} from 'class-validator';
 
 export class CreateDeckDto {
   @IsString()
   @MinLength(1)
   name: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['standard', 'unlimited'])
+  format?: string;
 }
 
 export class UpdateDeckDto {
+  @IsOptional()
   @IsString()
   @MinLength(1)
-  name: string;
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['standard', 'unlimited'])
+  format?: string;
 }
 
 export class AddCardToDeckDto {

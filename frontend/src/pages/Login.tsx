@@ -17,6 +17,7 @@ export default function Login() {
       navigate('/');
     } catch {
       setError('Invalid email or password');
+      return;
     }
   };
 

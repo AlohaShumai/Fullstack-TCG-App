@@ -4,6 +4,13 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { isSetStandardLegal, isCardBanned } from '../config/rotation.config';
+
+interface CardLegalities {
+  standard?: string;
+  expanded?: string;
+  unlimited?: string;
+}
 
 @Injectable()
 export class DecksService {
@@ -16,10 +23,25 @@ export class DecksService {
     return card.supertype === 'Energy' && card.subtypes.includes('Basic');
   }
 
-  async createDeck(userId: string, name: string) {
+  private isCardLegalInFormat(
+    card: { setName: string; id: string; legalities?: CardLegalities | null },
+    format: string,
+  ): boolean {
+    if (format === 'unlimited') return true;
+
+    // Use our rotation config for Standard
+    if (format === 'standard') {
+      return isSetStandardLegal(card.setName) && !isCardBanned(card.id);
+    }
+
+    return true;
+  }
+
+  async createDeck(userId: string, name: string, format: string = 'unlimited') {
     return this.prisma.deck.create({
       data: {
         name,
+        format,
         userId,
       },
       include: {
@@ -63,12 +85,36 @@ export class DecksService {
     return deck;
   }
 
-  async updateDeck(userId: string, deckId: string, name: string) {
-    await this.getDeckById(userId, deckId);
+  async updateDeck(
+    userId: string,
+    deckId: string,
+    data: { name?: string; format?: string },
+  ) {
+    const deck = await this.getDeckById(userId, deckId);
+
+    // If changing to standard format, validate all existing cards
+    if (data.format === 'standard' && deck.format !== 'standard') {
+      const illegalCards = deck.cards.filter((dc) => {
+        return !this.isCardLegalInFormat(
+          { setName: dc.card.setName, id: dc.card.id },
+          'standard',
+        );
+      });
+
+      if (illegalCards.length > 0) {
+        const cardNames = illegalCards.map((dc) => dc.card.name).join(', ');
+        throw new BadRequestException(
+          `Cannot change to Standard format. These cards are not Standard-legal: ${cardNames}`,
+        );
+      }
+    }
 
     return this.prisma.deck.update({
       where: { id: deckId },
-      data: { name },
+      data: {
+        ...(data.name && { name: data.name }),
+        ...(data.format && { format: data.format }),
+      },
       include: {
         cards: {
           include: { card: true },
@@ -101,6 +147,18 @@ export class DecksService {
 
     if (!card) {
       throw new NotFoundException(`Card ${cardId} not found`);
+    }
+
+    // Check if card is legal in deck's format using our rotation config
+    if (
+      !this.isCardLegalInFormat(
+        { setName: card.setName, id: card.id },
+        deck.format,
+      )
+    ) {
+      throw new BadRequestException(
+        `${card.name} is not legal in ${deck.format} format. Set "${card.setName}" is not in the current rotation.`,
+      );
     }
 
     // Calculate current deck size
@@ -218,24 +276,49 @@ export class DecksService {
     const deck = await this.getDeckById(userId, deckId);
 
     const errors: string[] = [];
+    const warnings: string[] = [];
     const totalCards = deck.cards.reduce((sum, dc) => sum + dc.quantity, 0);
 
     if (totalCards !== 60) {
       errors.push(`Deck has ${totalCards} cards (must be exactly 60)`);
     }
 
+    // Check for at least one Basic Pokemon
+    const hasBasicPokemon = deck.cards.some(
+      (dc) =>
+        dc.card.supertype === 'Pokémon' && dc.card.subtypes.includes('Basic'),
+    );
+    if (!hasBasicPokemon && totalCards > 0) {
+      errors.push('Deck must have at least 1 Basic Pokémon');
+    }
+
     for (const deckCard of deck.cards) {
+      // Check 4-copy rule
       if (!this.isBasicEnergy(deckCard.card) && deckCard.quantity > 4) {
         errors.push(
           `${deckCard.card.name} has ${deckCard.quantity} copies (max 4 for non-basic Energy)`,
+        );
+      }
+
+      // Check format legality using our rotation config
+      if (
+        !this.isCardLegalInFormat(
+          { setName: deckCard.card.setName, id: deckCard.card.id },
+          deck.format,
+        )
+      ) {
+        errors.push(
+          `${deckCard.card.name} (${deckCard.card.setName}) is not legal in ${deck.format} format`,
         );
       }
     }
 
     return {
       valid: errors.length === 0,
+      format: deck.format,
       totalCards,
       errors,
+      warnings,
     };
   }
 }

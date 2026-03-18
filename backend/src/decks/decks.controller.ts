@@ -33,7 +33,11 @@ export class DecksController {
 
   @Post()
   async createDeck(@Request() req: AuthRequest, @Body() dto: CreateDeckDto) {
-    return this.decksService.createDeck(req.user.id, dto.name);
+    return this.decksService.createDeck(
+      req.user.id,
+      dto.name,
+      dto.format || 'unlimited',
+    );
   }
 
   @Get()
@@ -63,7 +67,10 @@ export class DecksController {
     @Param('deckId') deckId: string,
     @Body() dto: UpdateDeckDto,
   ) {
-    return this.decksService.updateDeck(req.user.id, deckId, dto.name);
+    return this.decksService.updateDeck(req.user.id, deckId, {
+      name: dto.name,
+      format: dto.format,
+    });
   }
 
   @Delete(':deckId')

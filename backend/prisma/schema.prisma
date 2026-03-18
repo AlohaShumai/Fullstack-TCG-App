@@ -28,48 +28,60 @@ model User {
 }
 
 model Card {
-  id           String   @id // Pokemon TCG API id (e.g., "base1-4")
-  name         String
-  supertype    String   // Pokemon, Trainer, Energy
-  subtypes     String[] // Basic, Stage 1, Item, etc.
-  hp           String?
-  types        String[] // Fire, Water, etc.
-  abilities    Json?    // Array of abilities
-  attacks      Json?    // Array of attacks
-  weaknesses   Json?
-  resistances  Json?
-  retreatCost  String[]
-  rules        String[] // Card rules text
-  imageSmall   String?
-  imageLarge   String?
-  setId        String
-  setName      String
-  
-  // Vector embedding for RAG search
-  embedding    Unsupported("vector(1536)")?
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id
+  name        String
+  supertype   String
+  subtypes    String[]
+  hp          String?
+  types       String[]
+  abilities   Json?
+  attacks     Json?
+  weaknesses  Json?
+  resistances Json?
+  retreatCost String[]
+  rules       String[]
+  legalities  Json?
+  imageSmall  String?
+  imageLarge  String?
+  setId       String
+  setName     String
+  embedding   Unsupported("vector(1536)")?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  collections  Collection[]
-  deckCards    DeckCard[]
+  collectionCards CollectionCard[]
+  deckCards       DeckCard[]
 }
 
 model Collection {
-  id       String @id @default(uuid())
-  userId   String
-  cardId   String
-  quantity Int    @default(1)
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isPublic    Boolean  @default(false)
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cards CollectionCard[]
+}
 
-  @@unique([userId, cardId])
+model CollectionCard {
+  id           String @id @default(uuid())
+  collectionId String
+  cardId       String
+  quantity     Int    @default(1)
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  card       Card       @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, cardId])
 }
 
 model Deck {
   id        String   @id @default(uuid())
   name      String
+  format    String   @default("unlimited")
   userId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

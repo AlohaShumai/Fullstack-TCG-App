@@ -18,6 +18,7 @@ interface DeckCard {
 interface Deck {
   id: string;
   name: string;
+  format: string;
   cards: DeckCard[];
 }
 
@@ -25,6 +26,7 @@ export default function Decks() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [loading, setLoading] = useState(true);
   const [newDeckName, setNewDeckName] = useState('');
+  const [newDeckFormat, setNewDeckFormat] = useState('unlimited');
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   useEffect(() => {
@@ -45,8 +47,9 @@ export default function Decks() {
   const createDeck = async () => {
     if (!newDeckName.trim()) return;
     try {
-      await api.post('/decks', { name: newDeckName });
+      await api.post('/decks', { name: newDeckName, format: newDeckFormat });
       setNewDeckName('');
+      setNewDeckFormat('unlimited');
       setShowCreateForm(false);
       fetchDecks();
     } catch (error) {
@@ -66,6 +69,12 @@ export default function Decks() {
 
   const getTotalCards = (deck: Deck) => {
     return deck.cards.reduce((sum, card) => sum + card.quantity, 0);
+  };
+
+  const getFormatBadgeColor = (format: string) => {
+    return format === 'standard' 
+      ? 'bg-green-600 text-green-100' 
+      : 'bg-blue-600 text-blue-100';
   };
 
   if (loading) {
@@ -101,27 +110,37 @@ export default function Decks() {
         {showCreateForm && (
           <div className="bg-gray-800 rounded-lg p-4 sm:p-6 mb-6">
             <h3 className="text-xl font-bold text-white mb-4">Create New Deck</h3>
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col gap-4">
               <input
                 type="text"
                 placeholder="Deck name..."
                 value={newDeckName}
                 onChange={(e) => setNewDeckName(e.target.value)}
-                className="flex-1 p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-purple-500 focus:outline-none"
+                className="p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-purple-500 focus:outline-none"
               />
-              <div className="flex gap-2">
-                <button
-                  onClick={createDeck}
-                  className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded transition"
+              <div className="flex flex-col sm:flex-row gap-4">
+                <select
+                  value={newDeckFormat}
+                  onChange={(e) => setNewDeckFormat(e.target.value)}
+                  className="flex-1 p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-purple-500 focus:outline-none"
                 >
-                  Create
-                </button>
-                <button
-                  onClick={() => setShowCreateForm(false)}
-                  className="flex-1 sm:flex-none bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded transition"
-                >
-                  Cancel
-                </button>
+                  <option value="unlimited">Unlimited (Any cards)</option>
+                  <option value="standard">Standard (Tournament legal)</option>
+                </select>
+                <div className="flex gap-2">
+                  <button
+                    onClick={createDeck}
+                    className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded transition"
+                  >
+                    Create
+                  </button>
+                  <button
+                    onClick={() => setShowCreateForm(false)}
+                    className="flex-1 sm:flex-none bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -141,7 +160,7 @@ export default function Decks() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {decks.map(deck => (
               <div key={deck.id} className="bg-gray-800 rounded-lg p-4 sm:p-6">
-                <div className="flex justify-between items-start mb-4">
+                <div className="flex justify-between items-start mb-2">
                   <h3 className="text-xl font-bold text-purple-400">{deck.name}</h3>
                   <button
                     onClick={() => deleteDeck(deck.id)}
@@ -149,6 +168,12 @@ export default function Decks() {
                   >
                     Delete
                   </button>
+                </div>
+                
+                <div className="mb-4">
+                  <span className={`text-xs px-2 py-1 rounded ${getFormatBadgeColor(deck.format)}`}>
+                    {deck.format === 'standard' ? 'Standard' : 'Unlimited'}
+                  </span>
                 </div>
                 
                 <div className="mb-4">

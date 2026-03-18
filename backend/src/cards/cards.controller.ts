@@ -1,63 +1,84 @@
-import { Controller, Get, Post, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  UseGuards,
+  Param,
+  BadRequestException,
+} from '@nestjs/common';
 import { CardsService } from './cards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('cards')
 export class CardsController {
-  constructor(private cardsService: CardsService) {}
+  constructor(private readonly cardsService: CardsService) {}
 
   @Get()
-  @UseGuards(JwtAuthGuard)
-  async getAllCards() {
-    return this.cardsService.getAllCards();
+  async getCards(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('type') type?: string,
+    @Query('set') set?: string,
+    @Query('supertype') supertype?: string,
+    @Query('format') format?: string,
+  ) {
+    return this.cardsService.getCards({
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+      search,
+      type,
+      set,
+      supertype,
+      format,
+    });
   }
 
-  @Get('search')
-  @UseGuards(JwtAuthGuard)
-  async searchCards(@Query('q') query: string) {
-    return this.cardsService.searchCards(query || '');
+  // Static routes MUST come before dynamic :id route
+  @Get('sets')
+  async getSets() {
+    return this.cardsService.getAllSetsWithLegality();
   }
 
-  @Get('count')
-  @UseGuards(JwtAuthGuard)
-  async getCardCount() {
-    const count = await this.cardsService.getCardCount();
-    return { count };
+  @Get('rotation')
+  getRotationInfo() {
+    return this.cardsService.getRotationInfo();
   }
 
+  @Get('available-sets')
+  async getAvailableSets() {
+    return this.cardsService.fetchAvailableSets();
+  }
+
+  // Dynamic :id route MUST be last
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
-  async getCardById(@Param('id') id: string) {
+  async getCard(@Param('id') id: string) {
     return this.cardsService.getCardById(id);
-  }
-
-  @Post('sync')
-  @UseGuards(JwtAuthGuard)
-  async syncCards(@Query('pages') pages?: string) {
-    const pageCount = pages ? parseInt(pages, 10) : 1;
-    return this.cardsService.syncCards(pageCount);
   }
 
   @Post('sync/standard')
   @UseGuards(JwtAuthGuard)
-  async syncStandard(@Query('pages') pages?: string) {
+  async syncStandardCards(@Query('pages') pages?: string) {
     const pageCount = pages ? parseInt(pages, 10) : 5;
-    return this.cardsService.syncStandardLegal(pageCount);
-  }
-
-  @Post('sync/expanded')
-  @UseGuards(JwtAuthGuard)
-  async syncExpanded(@Query('pages') pages?: string) {
-    const pageCount = pages ? parseInt(pages, 10) : 5;
-    return this.cardsService.syncExpandedLegal(pageCount);
+    return this.cardsService.syncStandardCards(pageCount);
   }
 
   @Post('sync/set')
   @UseGuards(JwtAuthGuard)
   async syncSet(@Query('name') setName: string) {
     if (!setName) {
-      return { error: 'Set name is required. Use ?name=SetName' };
+      throw new BadRequestException('Set name is required');
     }
     return this.cardsService.syncSet(setName);
+  }
+
+  @Post('sync/set-id')
+  @UseGuards(JwtAuthGuard)
+  async syncSetById(@Query('id') setId: string) {
+    if (!setId) {
+      throw new BadRequestException('Set ID is required');
+    }
+    return this.cardsService.syncSetById(setId);
   }
 }
