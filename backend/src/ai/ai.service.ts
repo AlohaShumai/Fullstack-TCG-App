@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import OpenAI from 'openai';
 import { tavily, TavilyClient } from '@tavily/core';
+import { STANDARD_LEGAL_SETS, ROTATION_INFO } from '../config/rotation.config';
 
 export interface CardData {
   id: string;
@@ -128,6 +129,7 @@ export class AiService {
           'limitless.io',
           'pokebeach.com',
           'sixprizes.com',
+          'pokemon.com',
         ],
       });
 
@@ -315,62 +317,119 @@ export class AiService {
     userId: string,
     message: string,
     conversationHistory: ChatMessage[] = [],
-  ): Promise<{ response: string; suggestions?: string[] }> {
-    // Get user's collection summary
+  ): Promise<{ response: string; suggestions?: string[]; sources?: string[] }> {
     const collection = await this.getUserCollection(userId);
     const collectionSummary = this.summarizeCollection(collection);
 
-    // Search web for real-time data on meta/competitive questions
-    const isMetaQuery =
-      /meta|counter|competitive|tier|best deck|top deck/i.test(message);
-    let webContext = '';
-    if (isMetaQuery) {
-      const webData = await this.searchWebForMeta(
-        `Pokemon TCG ${message} ${new Date().getFullYear()}`,
-      );
-      if (webData) {
-        webContext = `\n\nReal-time community data:\n${webData}`;
-      }
-    }
-
     const systemPrompt = `You are an expert Pokemon TCG deck building advisor. You help players:
 - Build competitive decks
-- Understand the current meta
+- Understand the current meta and tournament results
 - Optimize their existing decks
 - Make the most of their card collection
+- Answer questions about card rulings, legality, and formats
+
+Current Standard legal sets (${ROTATION_INFO.currentSeason} season):
+${STANDARD_LEGAL_SETS.join(', ')}
+
+IMPORTANT: ${ROTATION_INFO.nextRotationNote}. When recommending decks, flag any cards from rotating sets.
 
 Fallback meta decks (Tier S = best, A = great):
 ${JSON.stringify(this.metaDecks.standard, null, 2)}
 
-User's collection summary:
-${collectionSummary}${webContext}
+User's collection (every card they own):
+${collectionSummary}
+
+COLLECTION RULES — follow these strictly:
+- When the user asks what cards they have, what they're missing, what decks they can build, or anything about their collection, use ONLY the collection data above to answer. Do not search the web for this.
+- When asked "what am I missing for X deck": first use search_web to find the standard deck list for X, then compare every card in that list against the user's collection above, and clearly state which cards they already have and which they are missing.
+- Never say the user has a card unless it appears in their collection above.
+
+You have access to a search_web tool. Use it when the question involves:
+- Current meta, tier lists, or tournament results
+- Recent or upcoming sets and cards
+- Card legality, rotation, or ban lists
+- Finding a deck list to compare against the user's collection
 
 Be helpful, specific, and concise. When suggesting decks, mention specific card names.
 If the user asks about building a deck, ask clarifying questions if needed (format, playstyle, budget).`;
 
+    const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+      {
+        type: 'function',
+        function: {
+          name: 'search_web',
+          description:
+            'Search the web for up-to-date TCG information including tournament results, meta decks, card legality, new sets, and rulings.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'The search query to look up',
+              },
+            },
+            required: ['query'],
+          },
+        },
+      },
+    ];
+
     const messages: OpenAI.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
       ...conversationHistory.map((m) => ({
-        role: m.role,
+        role: m.role as 'user' | 'assistant',
         content: m.content,
       })),
       { role: 'user', content: message },
     ];
 
-    const completion = await this.openai.chat.completions.create({
+    // First call — let GPT decide if it needs to search
+    const firstResponse = await this.openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages,
+      tools,
+      tool_choice: 'auto',
       max_tokens: 1000,
     });
 
+    const firstChoice = firstResponse.choices[0];
+
+    // If GPT called search_web, execute it and call again with results
+    if (firstChoice.finish_reason === 'tool_calls' && firstChoice.message.tool_calls) {
+      const toolCall = firstChoice.message.tool_calls[0];
+      const args = (toolCall as unknown as { function: { arguments: string } }).function.arguments;
+      const { query } = JSON.parse(args) as { query: string };
+
+      this.logger.log(`AI searching web for: ${query}`);
+      const webResults = await this.searchWebForMeta(query);
+
+      const messagesWithResults: OpenAI.ChatCompletionMessageParam[] = [
+        ...messages,
+        firstChoice.message,
+        {
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: webResults || 'No results found.',
+        },
+      ];
+
+      const secondResponse = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: messagesWithResults,
+        max_tokens: 1000,
+      });
+
+      const response =
+        secondResponse.choices[0].message.content ||
+        'I could not generate a response.';
+
+      return { response, suggestions: this.generateSuggestions(message), sources: ['web', 'collection'] };
+    }
+
     const response =
-      completion.choices[0].message.content ||
-      'I could not generate a response.';
+      firstChoice.message.content || 'I could not generate a response.';
 
-    // Generate follow-up suggestions
-    const suggestions = this.generateSuggestions(message);
-
-    return { response, suggestions };
+    return { response, suggestions: this.generateSuggestions(message), sources: ['collection'] };
   }
 
   async buildDeck(
@@ -724,6 +783,7 @@ Return a JSON object:
     const byType: Record<string, number> = {};
     const bySupertype: Record<string, number> = {};
     let totalCards = 0;
+    const cardLines: string[] = [];
 
     for (const [, data] of collection) {
       totalCards += data.quantity;
@@ -734,17 +794,18 @@ Return a JSON object:
       for (const type of data.card.types || []) {
         byType[type] = (byType[type] || 0) + data.quantity;
       }
+
+      cardLines.push(
+        `${data.card.name} x${data.quantity} (${supertype}, ${data.card.setName})`,
+      );
     }
 
-    return (
+    const summary =
       `${totalCards} total cards (${collection.size} unique). ` +
-      `Breakdown: ${Object.entries(bySupertype)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join(', ')}. ` +
-      `Types: ${Object.entries(byType)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join(', ')}`
-    );
+      `Breakdown: ${Object.entries(bySupertype).map(([k, v]) => `${k}: ${v}`).join(', ')}. ` +
+      `Types: ${Object.entries(byType).map(([k, v]) => `${k}: ${v}`).join(', ')}.`;
+
+    return `${summary}\n\nFull card list:\n${cardLines.join('\n')}`;
   }
 
   private generateSuggestions(userMessage: string): string[] {

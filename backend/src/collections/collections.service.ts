@@ -254,17 +254,16 @@ export class CollectionsService {
     );
     const uniqueCards = collection.cards.length;
 
-    const typeCount: Record<string, number> = {};
+    const supertypeCount: Record<string, number> = {};
     for (const item of collection.cards) {
-      for (const type of item.card.types) {
-        typeCount[type] = (typeCount[type] || 0) + item.quantity;
-      }
+      const supertype = item.card.supertype || 'Unknown';
+      supertypeCount[supertype] = (supertypeCount[supertype] || 0) + item.quantity;
     }
 
     return {
       totalCards,
       uniqueCards,
-      byType: typeCount,
+      bySupertype: supertypeCount,
     };
   }
 }

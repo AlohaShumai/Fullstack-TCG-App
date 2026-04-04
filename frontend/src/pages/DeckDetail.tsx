@@ -58,13 +58,24 @@ export default function DeckDetail() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [energyTypeFilter, setEnergyTypeFilter] = useState('');
+  const [setFilter, setSetFilter] = useState('');
+  const [allSets, setAllSets] = useState<{ id: string; name: string; standardLegal: boolean }[]>([]);
   const [error, setError] = useState('');
-  const [hoveredCard, setHoveredCard] = useState<Card | null>(null);
   const [message, setMessage] = useState('');
   const [cardPage, setCardPage] = useState(1);
   const [totalCards, setTotalCards] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
-  
+  const [collectionAllCards, setCollectionAllCards] = useState<Card[]>([]);
+  const [collectionDisplayCount, setCollectionDisplayCount] = useState(50);
+
+  // Collapsible deck sections
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const toggleSection = (type: string) =>
+    setCollapsed(prev => ({ ...prev, [type]: !prev[type] }));
+
+  const HEADER_H = 32;
+
   // Collection filter state
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([]);
@@ -100,11 +111,20 @@ export default function DeckDetail() {
     }
   }, []);
 
+  const fetchSets = useCallback(async () => {
+    try {
+      const response = await api.get('/cards/sets');
+      setAllSets(response.data);
+    } catch (error) {
+      console.error('Failed to fetch sets:', error);
+    }
+  }, []);
+
   const fetchAllCards = useCallback(async (page = 1, append = false) => {
     if (!deck) return;
     try {
       if (page > 1) setLoadingMore(true);
-      
+
       const params = new URLSearchParams();
       params.append('limit', '50');
       params.append('page', page.toString());
@@ -117,9 +137,15 @@ export default function DeckDetail() {
       if (typeFilter) {
         params.append('supertype', typeFilter);
       }
+      if (energyTypeFilter) {
+        params.append('type', energyTypeFilter);
+      }
+      if (setFilter) {
+        params.append('set', setFilter);
+      }
       const response = await api.get(`/cards?${params.toString()}`);
       const newCards = response.data.data || [];
-      
+
       if (append) {
         setAllCards(prev => [...prev, ...newCards]);
       } else {
@@ -132,7 +158,7 @@ export default function DeckDetail() {
     } finally {
       setLoadingMore(false);
     }
-  }, [deck, search, typeFilter]);
+  }, [deck, search, typeFilter, energyTypeFilter, setFilter]);
 
   const fetchCollectionCards = useCallback(async () => {
     if (selectedCollectionIds.length === 0) {
@@ -140,13 +166,13 @@ export default function DeckDetail() {
       setTotalCards(0);
       return;
     }
-    
+
     try {
       // Fetch all selected collections with their cards
       const responses = await Promise.all(
         selectedCollectionIds.map(id => api.get(`/collections/${id}`))
       );
-      
+
       // Combine all cards from all collections, removing duplicates
       const cardMap = new Map<string, Card>();
       responses.forEach(response => {
@@ -154,33 +180,38 @@ export default function DeckDetail() {
         collection.cards?.forEach((item: { card: Card }) => {
           if (!cardMap.has(item.card.id)) {
             // Apply filters
-            const matchesSearch = !search || 
+            const matchesSearch = !search ||
               item.card.name.toLowerCase().includes(search.toLowerCase());
-            const matchesType = !typeFilter || 
+            const matchesType = !typeFilter ||
               item.card.supertype === typeFilter;
-            const matchesFormat = deck?.format !== 'standard' || 
+            const matchesEnergyType = !energyTypeFilter ||
+              item.card.types?.includes(energyTypeFilter);
+            const matchesFormat = deck?.format !== 'standard' ||
               item.card.legalities?.standard === 'Legal';
-            
-            if (matchesSearch && matchesType && matchesFormat) {
+
+            if (matchesSearch && matchesType && matchesEnergyType && matchesFormat) {
               cardMap.set(item.card.id, item.card);
             }
           }
         });
       });
-      
+
       const cards = Array.from(cardMap.values());
-      setAllCards(cards);
+      setCollectionAllCards(cards);
+      setAllCards(cards.slice(0, 50));
+      setCollectionDisplayCount(50);
       setTotalCards(cards.length);
     } catch (error) {
       console.error('Failed to fetch collection cards:', error);
     }
-  }, [selectedCollectionIds, search, typeFilter, deck?.format]);
+  }, [selectedCollectionIds, search, typeFilter, energyTypeFilter, deck?.format]);
 
   useEffect(() => {
     fetchDeck();
     fetchValidation();
     fetchCollections();
-  }, [fetchDeck, fetchValidation, fetchCollections]);
+    fetchSets();
+  }, [fetchDeck, fetchValidation, fetchCollections, fetchSets]);
 
   useEffect(() => {
     if (deck) {
@@ -192,7 +223,7 @@ export default function DeckDetail() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deck, search, typeFilter, cardSource, selectedCollectionIds]);
+  }, [deck, search, typeFilter, energyTypeFilter, setFilter, cardSource, selectedCollectionIds]);
 
   const getCardQuantityInDeck = (cardId: string): number => {
     if (!deck) return 0;
@@ -256,8 +287,8 @@ export default function DeckDetail() {
 
   const getFormatBadgeColor = (format: string) => {
     return format === 'standard'
-      ? 'bg-green-600 text-green-100'
-      : 'bg-blue-600 text-blue-100';
+      ? 'bg-indigo-900 text-indigo-300'
+      : 'bg-slate-700 text-slate-300';
   };
 
   // Group deck cards by supertype
@@ -273,10 +304,10 @@ export default function DeckDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-          <p className="text-white text-xl">Loading deck...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mx-auto mb-4"></div>
+          <p className="text-slate-100 text-xl">Loading deck...</p>
         </div>
       </div>
     );
@@ -284,10 +315,10 @@ export default function DeckDetail() {
 
   if (!deck) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-white text-xl mb-4">Deck not found</p>
-          <Link to="/decks" className="text-purple-400 hover:underline">
+          <p className="text-slate-100 text-xl mb-4">Deck not found</p>
+          <Link to="/decks" className="text-indigo-400 hover:underline">
             Back to decks
           </Link>
         </div>
@@ -296,75 +327,45 @@ export default function DeckDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      {/* Navigation */}
-      <nav className="bg-gray-800 p-4">
-        <div className="container mx-auto flex justify-between items-center">
-          <Link to="/" className="text-2xl font-bold text-white">
-            TCG App
-          </Link>
-          <Link to="/decks" className="text-purple-400 hover:text-purple-300">
-            ← Back to Decks
-          </Link>
-        </div>
-      </nav>
+    <div className="flex-1 flex flex-col overflow-hidden">
 
       {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700 p-4">
-        <div className="container mx-auto">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-white">{deck.name}</h1>
-              <div className="flex items-center gap-3 mt-2">
-                <select
-                  value={deck.format}
-                  onChange={(e) => updateDeckFormat(e.target.value)}
-                  className="text-sm p-1 rounded bg-gray-700 text-white border border-gray-600"
-                >
-                  <option value="unlimited">Unlimited</option>
-                  <option value="standard">Standard</option>
-                </select>
-                <span
-                  className={`text-xs px-2 py-1 rounded ${getFormatBadgeColor(deck.format)}`}
-                >
-                  {deck.format === 'standard' ? 'Standard' : 'Unlimited'}
-                </span>
-              </div>
-            </div>
-
-            {/* Card Count & Validation */}
-            <div
-              className={`px-4 py-2 rounded-lg ${validation?.valid ? 'bg-green-900' : 'bg-yellow-900'}`}
+      <div className="bg-slate-800 border-b border-slate-700 px-4 py-2 flex-shrink-0">
+        <div className="flex flex-wrap justify-between items-center gap-2">
+          <div className="flex items-center gap-3">
+            <Link to="/decks" className="text-indigo-400 hover:text-indigo-300 text-sm">← Decks</Link>
+            <h1 className="text-lg font-bold text-slate-100">{deck.name}</h1>
+            <select
+              value={deck.format}
+              onChange={(e) => updateDeckFormat(e.target.value)}
+              className="text-xs p-1 rounded bg-slate-700 text-white border border-slate-600"
             >
-              <div className="flex items-center gap-2">
-                <span
-                  className={`text-xl ${validation?.valid ? 'text-green-400' : 'text-yellow-400'}`}
-                >
-                  {validation?.valid ? '✓' : '⚠'}
-                </span>
-                <span className="text-white font-bold text-lg">
-                  {getTotalCards()} / 60
-                </span>
-              </div>
+              <option value="unlimited">Unlimited</option>
+              <option value="standard">Standard</option>
+            </select>
+            <span className={`text-xs px-2 py-0.5 rounded ${getFormatBadgeColor(deck.format)}`}>
+              {deck.format === 'standard' ? 'Standard' : 'Unlimited'}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            {error && <span className="text-red-400 text-xs">{error}</span>}
+            <div className={`px-3 py-1 rounded-lg flex items-center gap-2 ${validation?.valid ? 'bg-green-900' : 'bg-yellow-900'}`}>
+              <span className={validation?.valid ? 'text-green-400' : 'text-yellow-400'}>
+                {validation?.valid ? '✓' : '⚠'}
+              </span>
+              <span className="text-white font-bold">{getTotalCards()} / 60</span>
               {validation && !validation.valid && validation.errors.length > 0 && (
-                <p className="text-yellow-300 text-xs mt-1">
-                  {validation.errors[0]}
-                </p>
+                <span className="text-yellow-300 text-xs">{validation.errors[0]}</span>
               )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-900 text-red-200 text-center py-2">{error}</div>
-      )}
-
       {/* Success Message */}
       {message && (
         <div
-          className="fixed bottom-6 left-1/2 bg-green-500 text-white py-2 px-4 rounded-full shadow-lg z-50 flex items-center gap-2"
+          className="fixed bottom-6 left-1/2 bg-green-700 text-white py-2 px-4 rounded-full shadow-lg z-50 flex items-center gap-2"
           style={{
             transform: 'translateX(-50%)',
             animation: 'bubblePop 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
@@ -375,15 +376,15 @@ export default function DeckDetail() {
         </div>
       )}
 
-      {/* Main Content - Side by Side */}
-      <div className="container mx-auto p-4">
-        <div className="flex flex-col lg:flex-row gap-4">
+      {/* Main Content - fills remaining height */}
+      <div className="flex-1 overflow-hidden p-4">
+        <div className="flex gap-4 h-full">
           {/* Left Panel - Card Browser */}
-          <div className="lg:w-1/2 xl:w-3/5">
-            <div className="bg-gray-800 rounded-lg p-4 sticky top-4">
-              <h2 className="text-lg font-bold text-white mb-3">
+          <div className="w-1/2 flex flex-col min-w-0">
+            <div className="bg-slate-800 rounded-lg p-4 flex flex-col h-full">
+              <h2 className="text-lg font-bold text-slate-100 mb-3">
                 Add Cards
-                <span className="text-gray-400 text-sm font-normal ml-2">
+                <span className="text-slate-400 text-sm font-normal ml-2">
                   {deck.format === 'standard'
                     ? '(Standard legal only)'
                     : '(All cards)'}
@@ -399,8 +400,8 @@ export default function DeckDetail() {
                   }}
                   className={`px-3 py-1 rounded-lg text-sm transition ${
                     cardSource === 'all'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                   }`}
                 >
                   All Cards
@@ -409,8 +410,8 @@ export default function DeckDetail() {
                   onClick={() => setShowCollectionPicker(true)}
                   className={`px-3 py-1 rounded-lg text-sm transition flex items-center gap-1 ${
                     cardSource === 'collections'
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                   }`}
                 >
                   My Collections
@@ -430,7 +431,7 @@ export default function DeckDetail() {
                     .map(c => (
                       <span
                         key={c.id}
-                        className="bg-green-700 text-green-100 text-xs px-2 py-1 rounded flex items-center gap-1"
+                        className="bg-indigo-700 text-indigo-100 text-xs px-2 py-1 rounded flex items-center gap-1"
                       >
                         {c.name}
                         <button
@@ -449,28 +450,58 @@ export default function DeckDetail() {
               )}
 
               {/* Filters */}
-              <div className="flex gap-2 mb-4">
+              <div className="flex flex-col gap-2 mb-4">
                 <input
                   type="text"
                   placeholder="Search cards..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="flex-1 p-2 rounded bg-gray-700 text-white border border-gray-600 focus:border-purple-500 focus:outline-none text-sm"
+                  className="w-full p-2 rounded bg-slate-700 text-white border border-slate-600 focus:border-indigo-500 focus:outline-none text-sm"
                 />
-                <select
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  className="p-2 rounded bg-gray-700 text-white border border-gray-600 text-sm"
-                >
-                  <option value="">All Types</option>
-                  <option value="Pokémon">Pokémon</option>
-                  <option value="Trainer">Trainer</option>
-                  <option value="Energy">Energy</option>
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    value={typeFilter}
+                    onChange={(e) => setTypeFilter(e.target.value)}
+                    className="flex-1 p-2 rounded bg-slate-700 text-white border border-slate-600 text-sm"
+                  >
+                    <option value="">All Supertypes</option>
+                    <option value="Pokémon">Pokémon</option>
+                    <option value="Trainer">Trainer</option>
+                    <option value="Energy">Energy</option>
+                  </select>
+                  <select
+                    value={energyTypeFilter}
+                    onChange={(e) => setEnergyTypeFilter(e.target.value)}
+                    className="flex-1 p-2 rounded bg-slate-700 text-white border border-slate-600 text-sm"
+                  >
+                    <option value="">All Types</option>
+                    {['Fire','Water','Grass','Lightning','Psychic','Fighting','Darkness','Metal','Dragon','Fairy','Colorless'].map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={setFilter}
+                    onChange={(e) => setSetFilter(e.target.value)}
+                    className="flex-1 p-2 rounded bg-slate-700 text-white border border-slate-600 text-sm"
+                  >
+                    <option value="">All Sets</option>
+                    {(deck.format === 'standard' ? allSets.filter(s => s.standardLegal) : allSets).map(s => (
+                      <option key={s.id} value={s.name}>{s.name}</option>
+                    ))}
+                  </select>
+                  {(search || typeFilter || energyTypeFilter || setFilter) && (
+                    <button
+                      onClick={() => { setSearch(''); setTypeFilter(''); setEnergyTypeFilter(''); setSetFilter(''); }}
+                      className="px-3 py-2 rounded bg-red-700 hover:bg-red-600 text-white text-sm transition"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Card Grid */}
-              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 max-h-[60vh] overflow-y-auto pr-2">
+              <div className="grid grid-cols-5 gap-2 flex-1 overflow-y-auto pr-1">
                 {allCards.map((card) => {
                   const qtyInDeck = getCardQuantityInDeck(card.id);
                   return (
@@ -478,8 +509,6 @@ export default function DeckDetail() {
                       key={card.id}
                       className="relative cursor-pointer group"
                       onClick={() => addCardToDeck(card.id, card.name)}
-                      onMouseEnter={() => setHoveredCard(card)}
-                      onMouseLeave={() => setHoveredCard(null)}
                     >
                       {card.imageSmall ? (
                         <img
@@ -487,20 +516,20 @@ export default function DeckDetail() {
                           alt={card.name}
                           className={`w-full rounded transition hover:scale-105 ${
                             qtyInDeck > 0
-                              ? 'ring-2 ring-purple-500'
+                              ? 'ring-2 ring-indigo-500'
                               : 'hover:ring-2 hover:ring-green-500'
                           }`}
                         />
                       ) : (
-                        <div className={`w-full aspect-[2.5/3.5] rounded bg-gray-700 flex items-center justify-center ${
-                          qtyInDeck > 0 ? 'ring-2 ring-purple-500' : ''
+                        <div className={`w-full aspect-[2.5/3.5] rounded bg-slate-700 flex items-center justify-center ${
+                          qtyInDeck > 0 ? 'ring-2 ring-indigo-500' : ''
                         }`}>
-                          <span className="text-gray-400 text-xs text-center px-1">{card.name}</span>
+                          <span className="text-slate-400 text-xs text-center px-1">{card.name}</span>
                         </div>
                       )}
                       {/* Quantity Badge */}
                       {qtyInDeck > 0 && (
-                        <div className="absolute top-1 right-1 bg-purple-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                        <div className="absolute top-1 right-1 bg-indigo-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
                           {qtyInDeck}
                         </div>
                       )}
@@ -512,19 +541,32 @@ export default function DeckDetail() {
                   );
                 })}
               </div>
-              
+
               {/* Load More / Card Count */}
               <div className="mt-3 text-center">
-                <p className="text-gray-400 text-xs mb-2">
-                  Showing {allCards.length} {cardSource === 'collections' ? 'cards from selected collections' : `of ${totalCards} cards`}
+                <p className="text-slate-400 text-xs mb-2">
+                  Showing {allCards.length} of {totalCards} cards
+                  {cardSource === 'collections' && ' from selected collections'}
                 </p>
                 {cardSource === 'all' && allCards.length < totalCards && (
                   <button
                     onClick={() => fetchAllCards(cardPage + 1, true)}
                     disabled={loadingMore}
-                    className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition text-sm"
+                    className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 text-white px-4 py-2 rounded-lg transition text-sm"
                   >
                     {loadingMore ? 'Loading...' : 'Load More Cards'}
+                  </button>
+                )}
+                {cardSource === 'collections' && allCards.length < totalCards && (
+                  <button
+                    onClick={() => {
+                      const newCount = collectionDisplayCount + 50;
+                      setCollectionDisplayCount(newCount);
+                      setAllCards(collectionAllCards.slice(0, newCount));
+                    }}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition text-sm"
+                  >
+                    Load More Cards
                   </button>
                 )}
               </div>
@@ -532,138 +574,62 @@ export default function DeckDetail() {
           </div>
 
           {/* Right Panel - Deck Contents */}
-          <div className="lg:w-1/2 xl:w-2/5">
-            <div className="bg-gray-800 rounded-lg p-4">
-              <h2 className="text-lg font-bold text-white mb-4">
+          <div className="w-1/2 flex flex-col min-w-0">
+            <div className="bg-slate-800 rounded-lg p-4 flex flex-col h-full">
+              <h2 className="text-lg font-bold text-slate-100 mb-3 flex-shrink-0">
                 Deck Contents
-                <span className="text-gray-400 text-sm font-normal ml-2">
-                  ({getTotalCards()} cards)
-                </span>
+                <span className="text-slate-400 text-sm font-normal ml-2">({getTotalCards()} cards)</span>
               </h2>
 
               {deck.cards.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <p className="text-4xl mb-2">📦</p>
+                <div className="text-center py-12 text-slate-400">
                   <p>Your deck is empty</p>
                   <p className="text-sm">Click cards on the left to add them</p>
                 </div>
-              ) : (
-                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-                  {/* Pokemon Section */}
-                  {groupedDeckCards?.['Pokémon'] &&
-                    groupedDeckCards['Pokémon'].length > 0 && (
-                      <div>
-                        <h3 className="text-purple-400 font-semibold text-sm mb-2 flex items-center gap-2">
-                          <span>Pokémon</span>
-                          <span className="text-gray-500">
-                            (
-                            {groupedDeckCards['Pokémon'].reduce(
-                              (sum, dc) => sum + dc.quantity,
-                              0
-                            )}
-                            )
-                          </span>
-                        </h3>
-                        <div className="space-y-1">
-                          {groupedDeckCards['Pokémon'].map((dc) => (
-                            <DeckCardRow
-                              key={dc.id}
-                              deckCard={dc}
-                              onUpdateQuantity={updateCardQuantity}
-                              onHover={setHoveredCard}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                  {/* Trainer Section */}
-                  {groupedDeckCards?.['Trainer'] &&
-                    groupedDeckCards['Trainer'].length > 0 && (
-                      <div>
-                        <h3 className="text-blue-400 font-semibold text-sm mb-2 flex items-center gap-2">
-                          <span>Trainer</span>
-                          <span className="text-gray-500">
-                            (
-                            {groupedDeckCards['Trainer'].reduce(
-                              (sum, dc) => sum + dc.quantity,
-                              0
-                            )}
-                            )
-                          </span>
-                        </h3>
-                        <div className="space-y-1">
-                          {groupedDeckCards['Trainer'].map((dc) => (
-                            <DeckCardRow
-                              key={dc.id}
-                              deckCard={dc}
-                              onUpdateQuantity={updateCardQuantity}
-                              onHover={setHoveredCard}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                  {/* Energy Section */}
-                  {groupedDeckCards?.['Energy'] &&
-                    groupedDeckCards['Energy'].length > 0 && (
-                      <div>
-                        <h3 className="text-yellow-400 font-semibold text-sm mb-2 flex items-center gap-2">
-                          <span>Energy</span>
-                          <span className="text-gray-500">
-                            (
-                            {groupedDeckCards['Energy'].reduce(
-                              (sum, dc) => sum + dc.quantity,
-                              0
-                            )}
-                            )
-                          </span>
-                        </h3>
-                        <div className="space-y-1">
-                          {groupedDeckCards['Energy'].map((dc) => (
-                            <DeckCardRow
-                              key={dc.id}
-                              deckCard={dc}
-                              onUpdateQuantity={updateCardQuantity}
-                              onHover={setHoveredCard}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                </div>
-              )}
+              ) : (() => {
+                const colors: Record<string, string> = {
+                  'Pokémon': 'text-purple-400',
+                  'Trainer': 'text-blue-400',
+                  'Energy': 'text-yellow-400',
+                };
+                const visibleTypes = (['Pokémon', 'Trainer', 'Energy'] as const).filter(
+                  t => (groupedDeckCards?.[t]?.length ?? 0) > 0
+                );
+                return (
+                  <div className="flex-1 overflow-y-auto pr-2">
+                    {visibleTypes.flatMap((type, idx) => {
+                      const reverseIdx = visibleTypes.length - 1 - idx;
+                      const cards = groupedDeckCards![type];
+                      const total = cards.reduce((s, dc) => s + dc.quantity, 0);
+                      return [
+                        <div
+                          key={`h-${type}`}
+                          onClick={() => toggleSection(type)}
+                          className={`sticky z-10 flex items-center gap-2 py-1.5 px-2 bg-slate-800 cursor-pointer hover:bg-slate-700 transition ${colors[type]} font-semibold text-sm`}
+                          style={{
+                            top: `${idx * HEADER_H}px`,
+                            bottom: `${reverseIdx * HEADER_H}px`,
+                          }}
+                        >
+                          <span>{collapsed[type] ? '▶' : '▼'}</span>
+                          <span>{type}</span>
+                          <span className="text-slate-500 font-normal">({total})</span>
+                        </div>,
+                        ...(!collapsed[type] ? cards.map(dc => (
+                          <div key={dc.id} className="mt-1">
+                            <DeckCardRow deckCard={dc} onUpdateQuantity={updateCardQuantity} />
+                          </div>
+                        )) : []),
+                      ];
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Card Preview Tooltip */}
-      {hoveredCard && (
-        <div
-          className="fixed right-4 top-1/2 transform -translate-y-1/2 z-50 pointer-events-none hidden lg:block"
-          style={{ animation: 'fadeIn 0.15s ease-out' }}
-        >
-          <div className="bg-gray-800 rounded-lg p-3 shadow-2xl border border-gray-700 w-64">
-            <img
-              src={hoveredCard.imageSmall}
-              alt={hoveredCard.name}
-              className="w-full rounded mb-2"
-            />
-            <h3 className="text-white font-bold text-sm">{hoveredCard.name}</h3>
-            <p className="text-gray-400 text-xs">
-              {hoveredCard.supertype}
-              {hoveredCard.hp && ` • ${hoveredCard.hp} HP`}
-            </p>
-            {hoveredCard.types && hoveredCard.types.length > 0 && (
-              <p className="text-gray-400 text-xs">
-                Type: {hoveredCard.types.join(', ')}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Animations */}
       <style>{`
@@ -679,10 +645,6 @@ export default function DeckDetail() {
             opacity: 1;
             transform: translateX(-50%) translateY(0) scale(1);
           }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
         }
         @keyframes modalFadeIn {
           from { opacity: 0; }
@@ -702,25 +664,25 @@ export default function DeckDetail() {
 
       {/* Collection Picker Modal */}
       {showCollectionPicker && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        <div
+          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
           style={{ animation: 'modalFadeIn 0.2s ease-out' }}
         >
-          <div 
-            className="bg-gray-800 rounded-lg p-6 w-full max-w-md"
+          <div
+            className="bg-slate-800 rounded-lg p-6 w-full max-w-md"
             style={{ animation: 'modalSlideIn 0.25s ease-out' }}
           >
-            <h3 className="text-xl font-bold text-white mb-2">Filter by Collection</h3>
-            <p className="text-gray-400 text-sm mb-4">
+            <h3 className="text-xl font-bold text-slate-100 mb-2">Filter by Collection</h3>
+            <p className="text-slate-400 text-sm mb-4">
               Select which collections to show cards from:
             </p>
-            
+
             {collections.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
+              <div className="text-center py-8 text-slate-400">
                 <p>You don't have any collections yet.</p>
                 <Link
                   to="/collection"
-                  className="text-green-400 hover:underline mt-2 inline-block"
+                  className="text-indigo-400 hover:underline mt-2 inline-block"
                 >
                   Create a collection first
                 </Link>
@@ -732,8 +694,8 @@ export default function DeckDetail() {
                     key={col.id}
                     className={`flex items-center p-3 rounded-lg cursor-pointer transition ${
                       selectedCollectionIds.includes(col.id)
-                        ? 'bg-green-600'
-                        : 'bg-gray-700 hover:bg-gray-600'
+                        ? 'bg-indigo-600'
+                        : 'bg-slate-700 hover:bg-slate-600'
                     }`}
                   >
                     <input
@@ -761,13 +723,13 @@ export default function DeckDetail() {
                   setCardSource('all');
                   setShowCollectionPicker(false);
                 }}
-                className="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-2 rounded-lg transition"
+                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition"
               >
                 Clear
               </button>
               <button
                 onClick={() => setShowCollectionPicker(false)}
-                className="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-2 rounded-lg transition"
+                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition"
               >
                 Cancel
               </button>
@@ -779,7 +741,7 @@ export default function DeckDetail() {
                   setShowCollectionPicker(false);
                 }}
                 disabled={selectedCollectionIds.length === 0}
-                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 rounded-lg transition"
+                className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white py-2 rounded-lg transition"
               >
                 Apply
               </button>
@@ -795,17 +757,13 @@ export default function DeckDetail() {
 function DeckCardRow({
   deckCard,
   onUpdateQuantity,
-  onHover,
 }: {
   deckCard: DeckCard;
   onUpdateQuantity: (cardId: string, quantity: number) => void;
-  onHover: (card: Card | null) => void;
 }) {
   return (
     <div
-      className="flex items-center gap-2 bg-gray-700 rounded p-2 hover:bg-gray-600 transition"
-      onMouseEnter={() => onHover(deckCard.card)}
-      onMouseLeave={() => onHover(null)}
+      className="flex items-center gap-2 bg-slate-700 rounded p-2 hover:bg-slate-600 transition"
     >
       <img
         src={deckCard.card.imageSmall}
@@ -814,7 +772,7 @@ function DeckCardRow({
       />
       <div className="flex-1 min-w-0">
         <p className="text-white text-sm truncate">{deckCard.card.name}</p>
-        <p className="text-gray-400 text-xs">
+        <p className="text-slate-400 text-xs">
           {deckCard.card.types?.join(', ') || deckCard.card.supertype}
         </p>
       </div>

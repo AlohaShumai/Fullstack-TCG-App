@@ -114,4 +114,18 @@ export class CollectionsController {
       body.quantity,
     );
   }
+
+  // Remove a card from a collection
+  @Delete(':collectionId/cards/:cardId')
+  async removeFromCollection(
+    @Request() req: AuthRequest,
+    @Param('collectionId') collectionId: string,
+    @Param('cardId') cardId: string,
+  ): Promise<unknown> {
+    return this.collectionsService.removeFromCollection(
+      req.user.id,
+      collectionId,
+      cardId,
+    );
+  }
 }

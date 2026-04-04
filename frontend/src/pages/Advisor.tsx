@@ -1,151 +1,123 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import api from '../services/api';
-
-interface AdviceResponse {
-  answer: string;
-  relevantCards: string[];
-}
+import { useRef, useEffect, useState } from 'react';
+import { useChat } from '../context/ChatContext';
 
 export default function Advisor() {
-  const [question, setQuestion] = useState('');
-  const [advice, setAdvice] = useState<AdviceResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const { messages, loading, loadingStatus, sendMessage, clearChat } = useChat();
+  const [input, setInput] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const getAdvice = async () => {
-    if (!question.trim()) return;
-    
-    setLoading(true);
-    setError('');
-    setAdvice(null);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-    try {
-      const response = await api.get(`/rag/advice?question=${encodeURIComponent(question)}`);
-      setAdvice(response.data);
-    } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      setError(error.response?.data?.message || 'Failed to get advice. Make sure embeddings are generated.');
-    } finally {
-      setLoading(false);
+  const handleSend = (text?: string) => {
+    const message = text ?? input.trim();
+    if (!message || loading) return;
+    void sendMessage(message);
+    setInput('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
 
-  const exampleQuestions = [
-    "What fire type Pokemon should I add to my deck?",
-    "How can I counter water decks?",
-    "What trainer cards help with card draw?",
-    "Build me a beginner-friendly deck",
-  ];
-
   return (
-    <div className="min-h-screen bg-gray-900">
-      <nav className="bg-gray-800 p-4">
-        <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
-          <Link to="/" className="text-2xl font-bold text-white">TCG App</Link>
-          <Link to="/decks" className="text-purple-400 hover:text-purple-300">My Decks</Link>
-        </div>
-      </nav>
+    <div className="flex-1 flex flex-col">
 
-      <div className="container mx-auto p-4 sm:p-8">
-        <h2 className="text-2xl sm:text-3xl font-bold text-white mb-6">Deck Advisor</h2>
-
-        {/* Info Box */}
-        <div className="bg-blue-900 rounded-lg p-4 sm:p-6 mb-6">
-          <h3 className="text-lg font-bold text-blue-300 mb-2">🤖 AI-Powered Advice</h3>
-          <p className="text-blue-100 text-sm sm:text-base">
-            Ask questions about deck building, card strategies, or type matchups. 
-            The advisor uses your card collection and AI to provide personalized recommendations.
-          </p>
-        </div>
-
-        {/* Question Input */}
-        <div className="bg-gray-800 rounded-lg p-4 sm:p-6 mb-6">
-          <label className="block text-white font-bold mb-2">Ask a Question</label>
-          <textarea
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="e.g., What cards should I add to counter water type decks?"
-            className="w-full p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-yellow-500 focus:outline-none resize-none h-24 sm:h-32"
-          />
+      <div className="container mx-auto p-4 sm:p-8 flex flex-col flex-1" style={{ maxWidth: '800px' }}>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-100">Professor AI</h2>
           <button
-            onClick={getAdvice}
-            disabled={loading || !question.trim()}
-            className="w-full sm:w-auto mt-4 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg transition font-bold"
+            onClick={clearChat}
+            className="text-sm text-slate-400 hover:text-red-400 transition"
           >
-            {loading ? 'Thinking...' : 'Get Advice'}
+            Clear Chat
           </button>
         </div>
 
-        {/* Example Questions */}
-        <div className="bg-gray-800 rounded-lg p-4 sm:p-6 mb-6">
-          <h3 className="text-lg font-bold text-gray-300 mb-3">Example Questions</h3>
-          <div className="flex flex-wrap gap-2">
-            {exampleQuestions.map((q, i) => (
-              <button
-                key={i}
-                onClick={() => setQuestion(q)}
-                className="bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm px-3 py-2 rounded transition"
-              >
-                {q}
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* Chat Window */}
+        <div className="flex-1 bg-slate-800 rounded-lg p-4 mb-4 overflow-y-auto space-y-4" style={{ minHeight: '400px', maxHeight: '60vh' }}>
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] ${msg.role === 'user' ? 'order-2' : ''}`}>
+                {msg.role === 'assistant' && (
+                  <p className="text-xs text-violet-400 mb-1 font-semibold">Professor AI</p>
+                )}
+                <div
+                  className={`rounded-lg px-4 py-3 ${
+                    msg.role === 'user'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-700 text-slate-100'
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap text-sm sm:text-base">{msg.content}</p>
+                </div>
 
-        {/* Error */}
-        {error && (
-          <div className="bg-red-900 rounded-lg p-4 sm:p-6 mb-6">
-            <p className="text-red-300">{error}</p>
-            <p className="text-red-400 text-sm mt-2">
-              Make sure you've run POST /rag/embed to generate card embeddings first.
-            </p>
-          </div>
-        )}
+                {msg.sources && msg.sources.length > 0 && (
+                  <div className="mt-1 mb-1">
+                    {msg.sources.includes('web') ? (
+                      <p className="text-xs text-slate-500">Searched the web</p>
+                    ) : (
+                      <p className="text-xs text-slate-500">Answered from knowledge</p>
+                    )}
+                  </div>
+                )}
 
-        {/* Loading */}
-        {loading && (
-          <div className="bg-gray-800 rounded-lg p-6 sm:p-8 mb-6">
-            <div className="flex items-center justify-center gap-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500"></div>
-              <p className="text-yellow-400">Analyzing cards and generating advice...</p>
+                {msg.suggestions && msg.suggestions.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {msg.suggestions.map((s, j) => (
+                      <button
+                        key={j}
+                        onClick={() => handleSend(s)}
+                        className="bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-300 text-xs px-3 py-1 rounded-full transition"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          ))}
 
-        {/* Advice Response */}
-        {advice && (
-          <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
-            <h3 className="text-xl font-bold text-yellow-400 mb-4">💡 Recommendation</h3>
-            <div className="bg-gray-700 rounded-lg p-4 mb-4">
-              <p className="text-white whitespace-pre-wrap">{advice.answer}</p>
-            </div>
-            
-            {advice.relevantCards && advice.relevantCards.length > 0 && (
-              <div>
-                <h4 className="text-lg font-bold text-gray-300 mb-2">Related Cards</h4>
-                <div className="flex flex-wrap gap-2">
-                  {advice.relevantCards.map((card, i) => (
-                    <span key={i} className="bg-yellow-900 text-yellow-300 px-3 py-1 rounded text-sm">
-                      {card}
-                    </span>
-                  ))}
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-slate-700 rounded-lg px-4 py-3">
+                <div className="flex gap-2 items-center">
+                  <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <span className="text-xs text-slate-400 ml-1">{loadingStatus}</span>
                 </div>
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
 
-        {/* Setup Instructions */}
-        <div className="bg-gray-800 rounded-lg p-4 sm:p-6 mt-6">
-          <h3 className="text-lg font-bold text-gray-300 mb-3">⚙️ Setup Required</h3>
-          <p className="text-gray-400 text-sm mb-2">For the advisor to work, you need:</p>
-          <ol className="text-gray-400 text-sm list-decimal list-inside space-y-1">
-            <li>OpenAI API key in your backend .env file</li>
-            <li>Run POST /rag/embed to generate card embeddings</li>
-            <li>Have cards synced in your database</li>
-          </ol>
+          <div ref={bottomRef} />
         </div>
+
+        {/* Input */}
+        <div className="flex gap-2">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask Professor AI anything about Pokemon TCG..."
+            rows={2}
+            className="flex-1 p-3 rounded-lg bg-slate-700 text-slate-100 border border-slate-600 focus:border-indigo-500 focus:outline-none resize-none text-sm sm:text-base"
+          />
+          <button
+            onClick={() => handleSend()}
+            disabled={loading || !input.trim()}
+            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition font-bold self-end"
+          >
+            Send
+          </button>
+        </div>
+        <p className="text-slate-500 text-xs mt-2">Press Enter to send, Shift+Enter for new line</p>
       </div>
     </div>
   );

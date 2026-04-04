@@ -1,1 +1,39 @@
 @import "tailwindcss";
+
+html {
+  scrollbar-gutter: stable;
+  color-scheme: dark;
+}
+
+/* Style scrollbar to match dark theme — invisible on short pages, clean on tall pages */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a; /* slate-900 — matches app background */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155; /* slate-700 */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569; /* slate-600 */
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: pageFadeIn 0.2s ease-out forwards;
+}

@@ -1,30 +1,41 @@
 // Standard Legal Sets - Update this list when rotation happens
-// Last updated: February 2025
+// Last updated: March 2026
+// Note: G-marked sets rotate out April 10, 2026 (in-person) / March 26, 2026 (digital)
 
-export const STANDARD_LEGAL_SETS: string[] = [
-  // Scarlet & Violet Era
+// G regulation mark sets (rotating out April 10, 2026)
+export const ROTATING_OUT_SETS: string[] = [
   'Scarlet & Violet',
   'Paldea Evolved',
   'Obsidian Flames',
   '151',
   'Paradox Rift',
   'Paldean Fates',
+];
+
+export const STANDARD_LEGAL_SETS: string[] = [
+  // G regulation mark (rotating out April 10, 2026 — still legal until then)
+  ...ROTATING_OUT_SETS,
+  // H regulation mark
   'Temporal Forces',
   'Twilight Masquerade',
   'Shrouded Fable',
+  // I regulation mark
   'Stellar Crown',
   'Surging Sparks',
   'Prismatic Evolutions',
+  // J regulation mark
+  'Destined Rivals',
   // Promos
   'Scarlet & Violet Promos',
   'SVP Black Star Promos',
 ];
 
 export const ROTATION_INFO = {
-  currentSeason: '2025',
-  lastRotationDate: '2024-04-05',
-  nextRotationExpected: 'April 2025',
-  source: 'https://www.pokemon.com/us/pokemon-tcg-banned-pokemon-cards',
+  currentSeason: '2025-2026',
+  lastRotationDate: '2025-04-11',
+  nextRotationDate: '2026-04-10',
+  nextRotationNote: 'G-marked sets (Scarlet & Violet through Paldean Fates) rotate out April 10, 2026',
+  source: 'https://www.pokemon.com/us/pokemon-news/2026-pokemon-tcg-standard-format-rotation-announcement',
 };
 
 // Banned cards (even if from legal sets)

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import api from '../services/api';
 
 interface Attack {
@@ -72,7 +71,7 @@ export default function Cards() {
   const [allSets, setAllSets] = useState<SetWithLegality[]>([]);
   const [rotationInfo, setRotationInfo] = useState<RotationInfo | null>(null);
   const [showRotationInfo, setShowRotationInfo] = useState(false);
-  
+
   // Collection picker state
   const [showCollectionPicker, setShowCollectionPicker] = useState(false);
   const [collections, setCollections] = useState<{ id: string; name: string }[]>([]);
@@ -166,6 +165,7 @@ export default function Cards() {
         // No collections exist, prompt user to create one
         setPendingCard({ id: cardId, name: cardName });
         setCollections([]);
+        setSelectedCard(null);
         setShowCollectionPicker(true);
       } else if (collectionsRes.data.length === 1) {
         // Only one collection, add directly
@@ -173,11 +173,13 @@ export default function Cards() {
           cardId,
           quantity: 1,
         });
+        setSelectedCard(null);
         showNotification(`Added ${cardName} to ${collectionsRes.data[0].name}!`);
       } else {
         // Multiple collections, show picker
         setCollections(collectionsRes.data);
         setPendingCard({ id: cardId, name: cardName });
+        setSelectedCard(null);
         setShowCollectionPicker(true);
       }
     } catch (error) {
@@ -189,28 +191,28 @@ export default function Cards() {
   const showNotification = (msg: string, isError = false) => {
     setMessage(msg);
     setIsErrorMessage(isError);
-    setTimeout(() => setMessage(''), 2500);
+    setTimeout(() => setMessage(''), isError ? 5000 : 2500);
   };
 
-  const addToSelectedCollections = async (collectionIds: string[]) => {
+  const addToSelectedCollections = async (collectionIds: string[], quantities: Record<string, number>) => {
     if (!pendingCard || collectionIds.length === 0) return;
-    
+
     try {
       // Add card to all selected collections
       await Promise.all(
         collectionIds.map((colId) =>
           api.post(`/collections/${colId}/cards`, {
             cardId: pendingCard.id,
-            quantity: 1,
+            quantity: quantities[colId] ?? 1,
           })
         )
       );
-      
+
       const collectionNames = collections
         .filter((c) => collectionIds.includes(c.id))
         .map((c) => c.name)
         .join(', ');
-      
+
       showNotification(`Added ${pendingCard.name} to ${collectionNames}!`);
     } catch (error) {
       console.error('Failed to add to collections:', error);
@@ -223,18 +225,18 @@ export default function Cards() {
 
   const createCollectionAndAdd = async (name: string) => {
     if (!pendingCard || !name.trim()) return;
-    
+
     try {
       const newCollection = await api.post('/collections', {
         name: name.trim(),
         isPublic: false,
       });
-      
+
       await api.post(`/collections/${newCollection.data.id}/cards`, {
         cardId: pendingCard.id,
         quantity: 1,
       });
-      
+
       showNotification(`Created "${name}" and added ${pendingCard.name}!`);
     } catch (error) {
       console.error('Failed to create collection:', error);
@@ -268,40 +270,30 @@ export default function Cards() {
 
   if (loading && cards.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-white text-xl">Loading cards...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mx-auto mb-4"></div>
+          <p className="text-slate-100 text-xl">Loading cards...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <nav className="bg-gray-800 p-4">
-        <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
-          <Link to="/" className="text-2xl font-bold text-white">
-            TCG App
-          </Link>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setShowRotationInfo(!showRotationInfo)}
-              className="text-yellow-400 hover:text-yellow-300 text-sm"
-            >
-              📋 Rotation Info
-            </button>
-            <Link to="/collection" className="text-green-400 hover:text-green-300">
-              My Collection
-            </Link>
-          </div>
-        </div>
-      </nav>
+    <div className="flex-1">
+      <div className="bg-slate-800 border-b border-slate-700 px-4 py-2">
+        <button
+          onClick={() => setShowRotationInfo(!showRotationInfo)}
+          className="text-yellow-400 hover:text-yellow-300 text-sm"
+        >
+          📋 Rotation Info
+        </button>
+      </div>
 
       {message && (
-        <div 
+        <div
           className={`fixed bottom-6 left-1/2 text-white text-center py-3 px-5 rounded-full shadow-xl z-50 flex items-center gap-2 ${
-            isErrorMessage ? 'bg-red-500' : 'bg-green-500'
+            isErrorMessage ? 'bg-red-700' : 'bg-green-700'
           }`}
           style={{
             transform: 'translateX(-50%)',
@@ -347,7 +339,7 @@ export default function Cards() {
       `}</style>
 
       {showRotationInfo && rotationInfo && (
-        <div className="bg-gray-800 border-b border-gray-700">
+        <div className="bg-slate-800 border-b border-slate-700">
           <div className="container mx-auto p-4">
             <div className="flex justify-between items-start mb-4">
               <h3 className="text-lg font-bold text-yellow-400">
@@ -355,24 +347,24 @@ export default function Cards() {
               </h3>
               <button
                 onClick={() => setShowRotationInfo(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-slate-400 hover:text-slate-100"
               >
                 ×
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-gray-400 text-sm">
+                <p className="text-slate-400 text-sm">
                   Current Season:{' '}
-                  <span className="text-white">{rotationInfo.currentSeason}</span>
+                  <span className="text-slate-100">{rotationInfo.currentSeason}</span>
                 </p>
-                <p className="text-gray-400 text-sm">
+                <p className="text-slate-400 text-sm">
                   Last Rotation:{' '}
-                  <span className="text-white">{rotationInfo.lastRotationDate}</span>
+                  <span className="text-slate-100">{rotationInfo.lastRotationDate}</span>
                 </p>
-                <p className="text-gray-400 text-sm">
+                <p className="text-slate-400 text-sm">
                   Next Rotation:{' '}
-                  <span className="text-white">
+                  <span className="text-slate-100">
                     {rotationInfo.nextRotationExpected}
                   </span>
                 </p>
@@ -380,13 +372,13 @@ export default function Cards() {
                   href={rotationInfo.source}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-400 hover:underline text-sm"
+                  className="text-indigo-400 hover:underline text-sm"
                 >
                   Official Pokemon TCG Rules →
                 </a>
               </div>
               <div>
-                <p className="text-gray-400 text-sm mb-2">Standard Legal Sets:</p>
+                <p className="text-slate-400 text-sm mb-2">Standard Legal Sets:</p>
                 <div className="flex flex-wrap gap-1">
                   {rotationInfo.standardLegalSets.map((set) => (
                     <span
@@ -404,18 +396,18 @@ export default function Cards() {
       )}
 
       <div className="container mx-auto p-4 sm:p-8">
-        <h2 className="text-2xl sm:text-3xl font-bold text-white mb-6">
+        <h2 className="text-2xl sm:text-3xl font-bold text-slate-100 mb-6">
           Browse Cards
         </h2>
 
-        <div className="bg-gray-800 rounded-lg p-4 mb-6">
+        <div className="bg-slate-800 rounded-lg p-4 mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
             <input
               type="text"
               placeholder="Search by name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="p-3 rounded bg-slate-700 text-slate-100 border border-slate-600 focus:border-indigo-500 focus:outline-none"
             />
 
             <select
@@ -424,7 +416,7 @@ export default function Cards() {
                 setFormatFilter(e.target.value);
                 setSetFilter('');
               }}
-              className="p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="p-3 rounded bg-slate-700 text-slate-100 border border-slate-600 focus:border-indigo-500 focus:outline-none"
             >
               <option value="">All Formats</option>
               <option value="standard">Standard Legal Only</option>
@@ -433,7 +425,7 @@ export default function Cards() {
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="p-3 rounded bg-slate-700 text-slate-100 border border-slate-600 focus:border-indigo-500 focus:outline-none"
             >
               <option value="">All Types</option>
               {types.map((type) => (
@@ -446,7 +438,7 @@ export default function Cards() {
             <select
               value={supertypeFilter}
               onChange={(e) => setSupertypeFilter(e.target.value)}
-              className="p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="p-3 rounded bg-slate-700 text-slate-100 border border-slate-600 focus:border-indigo-500 focus:outline-none"
             >
               <option value="">All Supertypes</option>
               {supertypes.map((st) => (
@@ -459,7 +451,7 @@ export default function Cards() {
             <select
               value={setFilter}
               onChange={(e) => setSetFilter(e.target.value)}
-              className="p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="p-3 rounded bg-slate-700 text-slate-100 border border-slate-600 focus:border-indigo-500 focus:outline-none"
             >
               <option value="">All Sets</option>
               {filteredSets.map((set) => (
@@ -478,7 +470,7 @@ export default function Cards() {
           </div>
 
           <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4">
-            <p className="text-gray-400 text-sm">
+            <p className="text-slate-400 text-sm">
               Showing {cards.length} of {total} cards (Page {page} of {totalPages})
               {formatFilter === 'standard' && (
                 <span className="text-green-400 ml-2">• Standard Legal Only</span>
@@ -497,7 +489,7 @@ export default function Cards() {
                   )
                 }
                 disabled={page <= 1}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded transition"
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded transition"
               >
                 Previous
               </button>
@@ -513,7 +505,7 @@ export default function Cards() {
                   )
                 }
                 disabled={page >= totalPages}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded transition"
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded transition"
               >
                 Next
               </button>
@@ -526,15 +518,15 @@ export default function Cards() {
             <div
               key={card.id}
               onClick={() => setSelectedCard(card)}
-              className="bg-gray-800 rounded-lg p-2 sm:p-3 hover:bg-gray-700 transition cursor-pointer relative"
+              className="bg-slate-800 rounded-lg p-2 sm:p-3 hover:bg-slate-700 transition cursor-pointer relative"
             >
               <div className="absolute top-3 right-3 flex flex-col gap-1">
                 {isStandardLegal(card) ? (
-                  <span className="bg-green-600 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-1">
+                  <span className="bg-green-900 text-green-300 text-xs px-1.5 py-0.5 rounded flex items-center gap-1">
                     ✓ Legal
                   </span>
                 ) : (
-                  <span className="bg-red-600 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-1 opacity-75">
+                  <span className="bg-red-900 text-red-400 text-xs px-1.5 py-0.5 rounded flex items-center gap-1 opacity-75">
                     ✗ Not Legal
                   </span>
                 )}
@@ -545,13 +537,13 @@ export default function Cards() {
                 alt={card.name}
                 className="w-full rounded mb-2"
               />
-              <h3 className="text-white font-semibold text-xs sm:text-sm truncate">
+              <h3 className="text-slate-100 font-semibold text-xs sm:text-sm truncate">
                 {card.name}
               </h3>
-              <p className="text-gray-400 text-xs mb-2">{card.setName}</p>
+              <p className="text-slate-400 text-xs mb-2">{card.setName}</p>
               <button
                 onClick={(e) => addToCollection(card.id, card.name, e)}
-                className="w-full bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm py-1 rounded transition"
+                className="w-full bg-green-600 hover:bg-green-500 text-white text-xs sm:text-sm py-1 rounded transition"
               >
                 + Add
               </button>
@@ -561,12 +553,12 @@ export default function Cards() {
 
         {cards.length === 0 && !loading && (
           <div className="text-center py-12">
-            <p className="text-gray-400 text-lg">
+            <p className="text-slate-400 text-lg">
               No cards found matching your filters.
             </p>
             <button
               onClick={clearFilters}
-              className="mt-4 text-blue-400 hover:underline"
+              className="mt-4 text-indigo-400 hover:underline"
             >
               Clear all filters
             </button>
@@ -576,31 +568,31 @@ export default function Cards() {
 
       {selectedCard && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50"
           onClick={() => setSelectedCard(null)}
         >
           <div
-            className="bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-slate-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h2 className="text-2xl font-bold text-white">
+                  <h2 className="text-2xl font-bold text-slate-100">
                     {selectedCard.name}
                   </h2>
                   <div className="flex gap-2 mt-2">
                     {isStandardLegal(selectedCard) ? (
-                      <span className="bg-green-600 text-white text-xs px-2 py-1 rounded">
+                      <span className="bg-green-900 text-green-300 text-xs px-2 py-1 rounded">
                         ✓ Standard Legal
                       </span>
                     ) : (
-                      <span className="bg-red-600 text-white text-xs px-2 py-1 rounded">
+                      <span className="bg-red-900 text-red-400 text-xs px-2 py-1 rounded opacity-75">
                         ✗ Not Standard Legal
                       </span>
                     )}
                     {isExpandedLegal(selectedCard) && (
-                      <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded">
+                      <span className="bg-slate-700 text-slate-300 text-xs px-2 py-1 rounded">
                         Expanded Legal
                       </span>
                     )}
@@ -608,7 +600,7 @@ export default function Cards() {
                 </div>
                 <button
                   onClick={() => setSelectedCard(null)}
-                  className="text-gray-400 hover:text-white text-2xl"
+                  className="text-slate-400 hover:text-slate-100 text-2xl"
                 >
                   ×
                 </button>
@@ -625,25 +617,25 @@ export default function Cards() {
                     onClick={() =>
                       addToCollection(selectedCard.id, selectedCard.name)
                     }
-                    className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg transition font-bold"
+                    className="w-full mt-4 bg-green-600 hover:bg-green-500 text-white py-3 rounded-lg transition font-bold"
                   >
                     + Add to Collection
                   </button>
                 </div>
 
                 <div className="space-y-4">
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <h3 className="text-lg font-bold text-blue-400 mb-2">
+                  <div className="bg-slate-700 rounded-lg p-4">
+                    <h3 className="text-lg font-bold text-indigo-400 mb-2">
                       Basic Info
                     </h3>
                     <div className="grid grid-cols-2 gap-2 text-sm">
-                      <p className="text-gray-400">Supertype:</p>
-                      <p className="text-white">{selectedCard.supertype}</p>
+                      <p className="text-slate-400">Supertype:</p>
+                      <p className="text-slate-100">{selectedCard.supertype}</p>
 
                       {selectedCard.subtypes?.length > 0 && (
                         <>
-                          <p className="text-gray-400">Subtypes:</p>
-                          <p className="text-white">
+                          <p className="text-slate-400">Subtypes:</p>
+                          <p className="text-slate-100">
                             {selectedCard.subtypes.join(', ')}
                           </p>
                         </>
@@ -651,31 +643,31 @@ export default function Cards() {
 
                       {selectedCard.hp && (
                         <>
-                          <p className="text-gray-400">HP:</p>
-                          <p className="text-white">{selectedCard.hp}</p>
+                          <p className="text-slate-400">HP:</p>
+                          <p className="text-slate-100">{selectedCard.hp}</p>
                         </>
                       )}
 
                       {selectedCard.types?.length > 0 && (
                         <>
-                          <p className="text-gray-400">Type:</p>
-                          <p className="text-white">
+                          <p className="text-slate-400">Type:</p>
+                          <p className="text-slate-100">
                             {selectedCard.types.join(', ')}
                           </p>
                         </>
                       )}
 
-                      <p className="text-gray-400">Set:</p>
-                      <p className="text-white">{selectedCard.setName}</p>
+                      <p className="text-slate-400">Set:</p>
+                      <p className="text-slate-100">{selectedCard.setName}</p>
                     </div>
                   </div>
 
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <h3 className="text-lg font-bold text-purple-400 mb-2">
+                  <div className="bg-slate-700 rounded-lg p-4">
+                    <h3 className="text-lg font-bold text-indigo-400 mb-2">
                       Format Legality
                     </h3>
                     <div className="grid grid-cols-2 gap-2 text-sm">
-                      <p className="text-gray-400">Standard:</p>
+                      <p className="text-slate-400">Standard:</p>
                       <p
                         className={
                           isStandardLegal(selectedCard)
@@ -687,7 +679,7 @@ export default function Cards() {
                           ? '✓ Legal'
                           : '✗ Not Legal (Rotated)'}
                       </p>
-                      <p className="text-gray-400">Expanded:</p>
+                      <p className="text-slate-400">Expanded:</p>
                       <p
                         className={
                           isExpandedLegal(selectedCard)
@@ -699,34 +691,34 @@ export default function Cards() {
                           ? '✓ Legal'
                           : '✗ Not Legal'}
                       </p>
-                      <p className="text-gray-400">Unlimited:</p>
+                      <p className="text-slate-400">Unlimited:</p>
                       <p className="text-green-400">✓ Legal</p>
                     </div>
                   </div>
 
                   {selectedCard.abilities && selectedCard.abilities.length > 0 && (
-                    <div className="bg-gray-700 rounded-lg p-4">
-                      <h3 className="text-lg font-bold text-purple-400 mb-2">
+                    <div className="bg-slate-700 rounded-lg p-4">
+                      <h3 className="text-lg font-bold text-violet-400 mb-2">
                         Abilities
                       </h3>
                       {selectedCard.abilities.map((ability: Ability, i: number) => (
                         <div key={i} className="mb-3">
-                          <p className="text-white font-semibold">{ability.name}</p>
-                          <p className="text-gray-300 text-sm">{ability.text}</p>
+                          <p className="text-slate-100 font-semibold">{ability.name}</p>
+                          <p className="text-slate-300 text-sm">{ability.text}</p>
                         </div>
                       ))}
                     </div>
                   )}
 
                   {selectedCard.attacks && selectedCard.attacks.length > 0 && (
-                    <div className="bg-gray-700 rounded-lg p-4">
+                    <div className="bg-slate-700 rounded-lg p-4">
                       <h3 className="text-lg font-bold text-red-400 mb-2">
                         Attacks
                       </h3>
                       {selectedCard.attacks.map((attack: Attack, i: number) => (
                         <div key={i} className="mb-3">
                           <div className="flex justify-between items-center">
-                            <p className="text-white font-semibold">
+                            <p className="text-slate-100 font-semibold">
                               {attack.name}
                             </p>
                             {attack.damage && (
@@ -736,12 +728,12 @@ export default function Cards() {
                             )}
                           </div>
                           {attack.cost?.length > 0 && (
-                            <p className="text-gray-400 text-xs">
+                            <p className="text-slate-400 text-xs">
                               Cost: {attack.cost.join(', ')}
                             </p>
                           )}
                           {attack.text && (
-                            <p className="text-gray-300 text-sm mt-1">
+                            <p className="text-slate-300 text-sm mt-1">
                               {attack.text}
                             </p>
                           )}
@@ -754,15 +746,15 @@ export default function Cards() {
                     selectedCard.resistances ||
                     (selectedCard.retreatCost &&
                       selectedCard.retreatCost.length > 0)) && (
-                    <div className="bg-gray-700 rounded-lg p-4">
+                    <div className="bg-slate-700 rounded-lg p-4">
                       <h3 className="text-lg font-bold text-yellow-400 mb-2">
                         Combat Info
                       </h3>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         {selectedCard.weaknesses && (
                           <>
-                            <p className="text-gray-400">Weakness:</p>
-                            <p className="text-white">
+                            <p className="text-slate-400">Weakness:</p>
+                            <p className="text-slate-100">
                               {selectedCard.weaknesses
                                 .map(
                                   (w: { type: string; value: string }) =>
@@ -774,8 +766,8 @@ export default function Cards() {
                         )}
                         {selectedCard.resistances && (
                           <>
-                            <p className="text-gray-400">Resistance:</p>
-                            <p className="text-white">
+                            <p className="text-slate-400">Resistance:</p>
+                            <p className="text-slate-100">
                               {selectedCard.resistances
                                 .map(
                                   (r: { type: string; value: string }) =>
@@ -788,8 +780,8 @@ export default function Cards() {
                         {selectedCard.retreatCost &&
                           selectedCard.retreatCost.length > 0 && (
                             <>
-                              <p className="text-gray-400">Retreat Cost:</p>
-                              <p className="text-white">
+                              <p className="text-slate-400">Retreat Cost:</p>
+                              <p className="text-slate-100">
                                 {selectedCard.retreatCost.length}
                               </p>
                             </>
@@ -799,12 +791,12 @@ export default function Cards() {
                   )}
 
                   {selectedCard.rules && selectedCard.rules.length > 0 && (
-                    <div className="bg-gray-700 rounded-lg p-4">
+                    <div className="bg-slate-700 rounded-lg p-4">
                       <h3 className="text-lg font-bold text-green-400 mb-2">
                         Rules
                       </h3>
                       {selectedCard.rules.map((rule: string, i: number) => (
-                        <p key={i} className="text-gray-300 text-sm mb-2">
+                        <p key={i} className="text-slate-300 text-sm mb-2">
                           {rule}
                         </p>
                       ))}
@@ -844,11 +836,12 @@ function CollectionPickerModal({
 }: {
   collections: { id: string; name: string }[];
   cardName: string;
-  onSelect: (collectionIds: string[]) => void;
+  onSelect: (collectionIds: string[], quantities: Record<string, number>) => void;
   onCreate: (name: string) => void;
   onClose: () => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [showCreateForm, setShowCreateForm] = useState(collections.length === 0);
   const [newName, setNewName] = useState('');
 
@@ -856,38 +849,48 @@ function CollectionPickerModal({
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
+    setQuantities((prev) => ({ ...prev, [id]: prev[id] ?? 1 }));
+  };
+
+  const changeQuantity = (id: string, delta: number) => {
+    setQuantities((prev) => ({ ...prev, [id]: Math.max(1, (prev[id] ?? 1) + delta) }));
   };
 
   const selectAll = () => {
     setSelectedIds(collections.map((c) => c.id));
+    setQuantities((prev) => {
+      const next = { ...prev };
+      collections.forEach((c) => { if (!next[c.id]) next[c.id] = 1; });
+      return next;
+    });
   };
 
   // If no collections, show create form
   if (showCreateForm || collections.length === 0) {
     return (
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      <div
+        className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
         style={{ animation: 'modalFadeIn 0.2s ease-out' }}
       >
-        <div 
-          className="bg-gray-800 rounded-lg p-6 w-full max-w-md"
+        <div
+          className="bg-slate-800 rounded-lg p-6 w-full max-w-md"
           style={{ animation: 'modalSlideIn 0.25s ease-out' }}
         >
-          <h3 className="text-xl font-bold text-white mb-2">Create a Collection</h3>
-          <p className="text-gray-400 mb-4">
-            {collections.length === 0 
+          <h3 className="text-xl font-bold text-slate-100 mb-2">Create a Collection</h3>
+          <p className="text-slate-400 mb-4">
+            {collections.length === 0
               ? `Create a collection to add ${cardName} to:`
               : `Create a new collection for ${cardName}:`
             }
           </p>
-          
+
           <input
             type="text"
             placeholder="Collection name (e.g., Trade Binder)"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && newName.trim() && onCreate(newName)}
-            className="w-full p-3 rounded-lg bg-gray-700 text-white border border-gray-600 focus:border-blue-500 focus:outline-none mb-4"
+            className="w-full p-3 rounded-lg bg-slate-700 text-slate-100 border border-slate-600 focus:border-indigo-500 focus:outline-none mb-4"
             autoFocus
           />
 
@@ -895,21 +898,21 @@ function CollectionPickerModal({
             {collections.length > 0 && (
               <button
                 onClick={() => setShowCreateForm(false)}
-                className="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-2 rounded-lg transition"
+                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition"
               >
                 Back
               </button>
             )}
             <button
               onClick={onClose}
-              className="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-2 rounded-lg transition"
+              className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition"
             >
               Cancel
             </button>
             <button
               onClick={() => onCreate(newName)}
               disabled={!newName.trim()}
-              className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 rounded-lg transition"
+              className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white py-2 rounded-lg transition"
             >
               Create & Add
             </button>
@@ -920,43 +923,67 @@ function CollectionPickerModal({
   }
 
   return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+    <div
+      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
       style={{ animation: 'modalFadeIn 0.2s ease-out' }}
     >
-      <div 
-        className="bg-gray-800 rounded-lg p-6 w-full max-w-md"
+      <div
+        className="bg-slate-800 rounded-lg p-6 w-full max-w-md"
         style={{ animation: 'modalSlideIn 0.25s ease-out' }}
       >
-        <h3 className="text-xl font-bold text-white mb-2">Add to Collection</h3>
-        <p className="text-gray-400 mb-4">
-          Select which collection(s) to add <span className="text-white font-semibold">{cardName}</span> to:
+        <h3 className="text-xl font-bold text-slate-100 mb-2">Add to Collection</h3>
+        <p className="text-slate-400 mb-4">
+          Select which collection(s) to add <span className="text-slate-100 font-semibold">{cardName}</span> to:
         </p>
-        
+
         <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
-          {collections.map((col) => (
-            <label
-              key={col.id}
-              className={`flex items-center p-3 rounded-lg cursor-pointer transition ${
-                selectedIds.includes(col.id)
-                  ? 'bg-blue-600'
-                  : 'bg-gray-700 hover:bg-gray-600'
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={selectedIds.includes(col.id)}
-                onChange={() => toggleCollection(col.id)}
-                className="mr-3 w-4 h-4"
-              />
-              <span className="text-white">{col.name}</span>
-            </label>
-          ))}
+          {collections.map((col) => {
+            const isSelected = selectedIds.includes(col.id);
+            const qty = quantities[col.id] ?? 1;
+            return (
+              <div
+                key={col.id}
+                className={`flex items-center p-3 rounded-lg transition ${
+                  isSelected ? 'bg-indigo-700' : 'bg-slate-700 hover:bg-slate-600'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggleCollection(col.id)}
+                  className="mr-3 w-4 h-4 cursor-pointer"
+                />
+                <span
+                  className="text-white flex-1 cursor-pointer"
+                  onClick={() => toggleCollection(col.id)}
+                >
+                  {col.name}
+                </span>
+                {isSelected && (
+                  <div className="flex items-center gap-2 ml-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); changeQuantity(col.id, -1); }}
+                      className="w-6 h-6 bg-indigo-900 hover:bg-indigo-800 text-white rounded text-sm font-bold flex items-center justify-center"
+                    >
+                      −
+                    </button>
+                    <span className="text-white font-bold w-5 text-center">{qty}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); changeQuantity(col.id, 1); }}
+                      className="w-6 h-6 bg-indigo-900 hover:bg-indigo-800 text-white rounded text-sm font-bold flex items-center justify-center"
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <button
           onClick={() => setShowCreateForm(true)}
-          className="w-full mb-4 p-2 rounded-lg border-2 border-dashed border-gray-600 text-gray-400 hover:border-blue-500 hover:text-blue-400 transition"
+          className="w-full mb-4 p-2 rounded-lg border-2 border-dashed border-slate-600 text-slate-400 hover:border-indigo-500 hover:text-indigo-400 transition"
         >
           + Create New Collection
         </button>
@@ -964,20 +991,20 @@ function CollectionPickerModal({
         <div className="flex gap-2">
           <button
             onClick={selectAll}
-            className="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-2 rounded-lg transition"
+            className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition"
           >
             Select All
           </button>
           <button
             onClick={onClose}
-            className="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-2 rounded-lg transition"
+            className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition"
           >
             Cancel
           </button>
           <button
-            onClick={() => onSelect(selectedIds)}
+            onClick={() => onSelect(selectedIds, quantities)}
             disabled={selectedIds.length === 0}
-            className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 rounded-lg transition"
+            className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white py-2 rounded-lg transition"
           >
             Add
           </button>
