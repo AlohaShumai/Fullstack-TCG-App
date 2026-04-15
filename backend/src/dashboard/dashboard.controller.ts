@@ -1,14 +1,7 @@
 import { Controller, Get, UseGuards, Request } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DashboardService } from './dashboard.service';
-
-interface AuthRequest {
-  user: {
-    id: string;
-    email: string;
-    role: string;
-  };
-}
+import type { AuthRequest } from '../common/types';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard)

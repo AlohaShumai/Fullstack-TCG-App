@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, type MouseEvent } from 'react';
 import api from '../services/api';
 
 interface Attack {
@@ -106,8 +106,8 @@ export default function Cards() {
     try {
       const response = await api.get('/cards/sets');
       setAllSets(response.data);
-    } catch (error) {
-      console.error('Failed to fetch sets:', error);
+    } catch {
+      // non-critical — filter just won't populate
     }
   };
 
@@ -115,8 +115,8 @@ export default function Cards() {
     try {
       const response = await api.get('/cards/rotation');
       setRotationInfo(response.data);
-    } catch (error) {
-      console.error('Failed to fetch rotation info:', error);
+    } catch {
+      // non-critical — rotation info banner just won't show
     }
   };
 
@@ -144,8 +144,8 @@ export default function Cards() {
       setTotalPages(response.data.meta?.totalPages || 1);
       setTotal(response.data.meta?.total || 0);
       setPage(response.data.meta?.page || 1);
-    } catch (error) {
-      console.error('Failed to fetch cards:', error);
+    } catch {
+      showNotification('Failed to load cards', true);
     } finally {
       setLoading(false);
     }
@@ -154,7 +154,7 @@ export default function Cards() {
   const addToCollection = async (
     cardId: string,
     cardName: string,
-    e?: React.MouseEvent
+    e?: MouseEvent
   ) => {
     if (e) e.stopPropagation();
     try {
@@ -182,8 +182,7 @@ export default function Cards() {
         setSelectedCard(null);
         setShowCollectionPicker(true);
       }
-    } catch (error) {
-      console.error('Failed to add to collection:', error);
+    } catch {
       showNotification('Failed to add card', true);
     }
   };
@@ -214,8 +213,7 @@ export default function Cards() {
         .join(', ');
 
       showNotification(`Added ${pendingCard.name} to ${collectionNames}!`);
-    } catch (error) {
-      console.error('Failed to add to collections:', error);
+    } catch {
       showNotification('Failed to add card', true);
     } finally {
       setShowCollectionPicker(false);
@@ -238,8 +236,7 @@ export default function Cards() {
       });
 
       showNotification(`Created "${name}" and added ${pendingCard.name}!`);
-    } catch (error) {
-      console.error('Failed to create collection:', error);
+    } catch {
       showNotification('Failed to create collection', true);
     } finally {
       setShowCollectionPicker(false);
@@ -280,7 +277,7 @@ export default function Cards() {
   }
 
   return (
-    <div className="flex-1">
+    <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="bg-slate-800 border-b border-slate-700 px-4 py-2">
         <button
           onClick={() => setShowRotationInfo(!showRotationInfo)}
@@ -304,40 +301,6 @@ export default function Cards() {
           <span>{message}</span>
         </div>
       )}
-      <style>{`
-        @keyframes bubblePop {
-          0% {
-            opacity: 0;
-            transform: translateX(-50%) translateY(30px) scale(0.5);
-          }
-          50% {
-            transform: translateX(-50%) translateY(-5px) scale(1.05);
-          }
-          100% {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0) scale(1);
-          }
-        }
-        @keyframes modalFadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-        @keyframes modalSlideIn {
-          from {
-            opacity: 0;
-            transform: scale(0.95) translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-      `}</style>
-
       {showRotationInfo && rotationInfo && (
         <div className="bg-slate-800 border-b border-slate-700">
           <div className="container mx-auto p-4">
@@ -568,11 +531,14 @@ export default function Cards() {
 
       {selectedCard && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm overflow-y-auto z-50"
+          style={{ animation: 'modalFadeIn 0.2s ease-out' }}
           onClick={() => setSelectedCard(null)}
         >
+          <div className="flex min-h-full items-center justify-center p-4">
           <div
-            className="bg-slate-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-slate-800 rounded-lg max-w-4xl w-full"
+            style={{ animation: 'modalSlideIn 0.25s ease-out' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6">
@@ -806,6 +772,7 @@ export default function Cards() {
               </div>
             </div>
           </div>
+          </div>
         </div>
       )}
 
@@ -869,7 +836,7 @@ function CollectionPickerModal({
   if (showCreateForm || collections.length === 0) {
     return (
       <div
-        className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
         style={{ animation: 'modalFadeIn 0.2s ease-out' }}
       >
         <div
@@ -924,7 +891,7 @@ function CollectionPickerModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       style={{ animation: 'modalFadeIn 0.2s ease-out' }}
     >
       <div

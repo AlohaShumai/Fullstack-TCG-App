@@ -9,6 +9,7 @@ interface FeaturedCard {
   types: string[];
   setName: string;
   imageSmall: string;
+  imageLarge?: string;
 }
 
 interface DashboardStats {
@@ -18,7 +19,7 @@ interface DashboardStats {
   uniquePokemon: number;
   cardsByType: { pokemon: number; trainer: number; energy: number };
   decks: Array<{ id: string; name: string; format: string; cardCount: number }>;
-  featuredCard: FeaturedCard | null;
+  featuredCards: FeaturedCard[];
 }
 
 interface NewsArticle {
@@ -56,6 +57,9 @@ export default function Dashboard() {
   const [newsIndex, setNewsIndex] = useState(0);
   const [newsFade, setNewsFade] = useState(true);
   const [visible, setVisible] = useState(false);
+  const [featuredCardOpen, setFeaturedCardOpen] = useState(false);
+  const [featuredIndex, setFeaturedIndex] = useState(0);
+  const [featuredFade, setFeaturedFade] = useState(true);
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
@@ -68,6 +72,19 @@ export default function Dashboard() {
       setNewsFade(true);
     }, 250);
   };
+
+  // Auto-rotate featured card every 5 seconds with fade
+  useEffect(() => {
+    if (!stats?.featuredCards || stats.featuredCards.length <= 1) return;
+    const timer = setInterval(() => {
+      setFeaturedFade(false);
+      setTimeout(() => {
+        setFeaturedIndex((i) => (i + 1) % stats.featuredCards.length);
+        setFeaturedFade(true);
+      }, 300);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [stats?.featuredCards]);
 
   // Auto-rotate news every 4 seconds with fade
   useEffect(() => {
@@ -86,17 +103,17 @@ export default function Dashboard() {
 
     api.get('/dashboard/stats')
       .then((res) => setStats(res.data))
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setStatsLoading(false));
 
     api.get('/dashboard/news')
       .then((res) => setNews(res.data))
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setNewsLoading(false));
 
     api.get('/dashboard/events')
       .then((res) => setEvents(res.data))
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setEventsLoading(false));
 
     api
@@ -105,7 +122,7 @@ export default function Dashboard() {
         history: [],
       })
       .then((res) => setAiSuggestion(res.data.response ?? ''))
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setAiLoading(false));
   }, []);
 
@@ -127,7 +144,7 @@ export default function Dashboard() {
 
 
   return (
-    <div className="flex-1">
+    <div className="flex-1 min-h-0 overflow-y-auto">
 
       <div
         className="container mx-auto p-4 sm:p-6"
@@ -305,16 +322,8 @@ export default function Dashboard() {
                 <Link
                   key={to}
                   to={to}
-                  className="flex items-center gap-3 text-white rounded-lg p-3 transition-all duration-200"
+                  className="flex items-center gap-3 text-white rounded-lg p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                   style={{ background: bg, boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
-                    (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 12px rgba(0,0,0,0.4)';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-                    (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
-                  }}
                 >
                   <div className="w-8 h-8 rounded flex items-center justify-center text-xs font-bold bg-white/20">
                     {badge}
@@ -342,36 +351,30 @@ export default function Dashboard() {
             </h2>
             {statsLoading ? (
               <p className="text-slate-500 text-sm animate-pulse">Loading...</p>
-            ) : stats?.featuredCard ? (
-              <div className="flex-1 flex flex-col items-center">
-                <img
-                  src={stats.featuredCard.imageSmall}
-                  alt={stats.featuredCard.name}
-                  className="w-full max-w-[160px] rounded-lg mb-3 cursor-pointer"
-                  style={{
-                    boxShadow: '0 0 20px rgba(255,255,255,0.3)',
-                    transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.transform = 'scale(1.1)';
-                    (e.currentTarget as HTMLElement).style.boxShadow = '0 0 30px rgba(255,255,255,0.5)';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
-                    (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(255,255,255,0.3)';
-                  }}
-                />
-                <p className="text-white text-sm font-semibold text-center">
-                  {stats.featuredCard.name}
-                </p>
-                <p className="text-slate-400 text-xs text-center mt-0.5">
-                  {stats.featuredCard.supertype}
-                  {stats.featuredCard.types?.length ? ` · ${stats.featuredCard.types.join('/')}` : ''}
-                </p>
-                <p className="text-slate-600 text-xs text-center mt-0.5">
-                  {stats.featuredCard.setName}
-                </p>
-              </div>
+            ) : stats?.featuredCards?.length ? (
+              (() => {
+                const card = stats.featuredCards[featuredIndex];
+                return (
+                  <div
+                    className="flex-1 flex flex-col items-center"
+                    style={{ opacity: featuredFade ? 1 : 0, transition: 'opacity 0.3s ease' }}
+                  >
+                    <img
+                      src={card.imageSmall}
+                      alt={card.name}
+                      className="w-full max-w-[160px] rounded-lg mb-3 cursor-pointer hover:scale-110 transition-all duration-300"
+                      style={{ boxShadow: '0 0 20px rgba(255,255,255,0.3)' }}
+                      onClick={() => setFeaturedCardOpen(true)}
+                    />
+                    <p className="text-white text-sm font-semibold text-center">{card.name}</p>
+                    <p className="text-slate-400 text-xs text-center mt-0.5">
+                      {card.supertype}
+                      {card.types?.length ? ` · ${card.types.join('/')}` : ''}
+                    </p>
+                    <p className="text-slate-600 text-xs text-center mt-0.5">{card.setName}</p>
+                  </div>
+                );
+              })()
             ) : (
               <p className="text-slate-500 text-sm">
                 Add cards to your collection to see a featured card.
@@ -428,16 +431,8 @@ export default function Dashboard() {
             )}
             <Link
               to="/decks"
-              className="block w-full text-center text-white rounded-lg py-2 text-sm transition-all duration-200"
+              className="block w-full text-center text-white rounded-lg py-2 text-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
               style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
-                (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 12px rgba(0,0,0,0.4)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-                (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
-              }}
             >
               + Create New Deck
             </Link>
@@ -503,16 +498,8 @@ export default function Dashboard() {
                 <p className="text-slate-300 text-sm leading-relaxed flex-1">{aiSuggestion}</p>
                 <Link
                   to="/advisor"
-                  className="mt-4 block w-full text-center text-white rounded-lg py-2 text-sm transition-all duration-200"
+                  className="mt-4 block w-full text-center text-white rounded-lg py-2 text-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                   style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
-                    (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 12px rgba(0,0,0,0.4)';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-                    (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
-                  }}
                 >
                   Ask for more details →
                 </Link>
@@ -524,16 +511,8 @@ export default function Dashboard() {
                 </p>
                 <Link
                   to="/advisor"
-                  className="mt-4 block w-full text-center text-white rounded-lg py-2 text-sm transition-all duration-200"
+                  className="mt-4 block w-full text-center text-white rounded-lg py-2 text-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                   style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
-                    (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 12px rgba(0,0,0,0.4)';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-                    (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
-                  }}
                 >
                   Open AI Advisor →
                 </Link>
@@ -542,6 +521,28 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Featured card image modal — outside the transformed container so fixed works correctly */}
+      {featuredCardOpen && stats?.featuredCards?.length && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm overflow-y-auto z-50"
+          style={{ animation: 'modalFadeIn 0.2s ease-out' }}
+          onClick={() => setFeaturedCardOpen(false)}
+        >
+          <div className="flex min-h-full items-center justify-center p-6">
+            <img
+              src={stats.featuredCards[featuredIndex].imageLarge ?? stats.featuredCards[featuredIndex].imageSmall}
+              alt={stats.featuredCards[featuredIndex].name}
+              className="rounded-xl max-h-[85vh] w-auto"
+              style={{
+                boxShadow: '0 0 60px rgba(255,255,255,0.25)',
+                animation: 'modalSlideIn 0.25s ease-out',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

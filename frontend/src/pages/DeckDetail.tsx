@@ -67,7 +67,9 @@ export default function DeckDetail() {
   const [totalCards, setTotalCards] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [collectionAllCards, setCollectionAllCards] = useState<Card[]>([]);
-  const [collectionDisplayCount, setCollectionDisplayCount] = useState(50);
+  const [collectionPage, setCollectionPage] = useState(1);
+
+  const CARDS_PER_PAGE = 30;
 
   // Collapsible deck sections
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -81,13 +83,15 @@ export default function DeckDetail() {
   const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([]);
   const [cardSource, setCardSource] = useState<'all' | 'collections'>('all');
   const [showCollectionPicker, setShowCollectionPicker] = useState(false);
+  const [respectCollectionQty, setRespectCollectionQty] = useState(false);
+  const [collectionQuantities, setCollectionQuantities] = useState<Record<string, number>>({});
 
   const fetchDeck = useCallback(async () => {
     try {
       const response = await api.get(`/decks/${deckId}`);
       setDeck(response.data);
-    } catch (error) {
-      console.error('Failed to fetch deck:', error);
+    } catch {
+      setError('Failed to load deck');
     } finally {
       setLoading(false);
     }
@@ -97,8 +101,8 @@ export default function DeckDetail() {
     try {
       const response = await api.get(`/decks/${deckId}/validate`);
       setValidation(response.data);
-    } catch (error) {
-      console.error('Failed to validate deck:', error);
+    } catch {
+      // validation badge just won't update
     }
   }, [deckId]);
 
@@ -106,8 +110,8 @@ export default function DeckDetail() {
     try {
       const response = await api.get('/collections');
       setCollections(response.data);
-    } catch (error) {
-      console.error('Failed to fetch collections:', error);
+    } catch {
+      // collection filter just won't populate
     }
   }, []);
 
@@ -115,8 +119,8 @@ export default function DeckDetail() {
     try {
       const response = await api.get('/cards/sets');
       setAllSets(response.data);
-    } catch (error) {
-      console.error('Failed to fetch sets:', error);
+    } catch {
+      // set filter just won't populate
     }
   }, []);
 
@@ -126,7 +130,7 @@ export default function DeckDetail() {
       if (page > 1) setLoadingMore(true);
 
       const params = new URLSearchParams();
-      params.append('limit', '50');
+      params.append('limit', CARDS_PER_PAGE.toString());
       params.append('page', page.toString());
       if (deck.format === 'standard') {
         params.append('format', 'standard');
@@ -153,8 +157,8 @@ export default function DeckDetail() {
       }
       setTotalCards(response.data.meta?.total || 0);
       setCardPage(page);
-    } catch (error) {
-      console.error('Failed to fetch cards:', error);
+    } catch {
+      // card browser just stays empty
     } finally {
       setLoadingMore(false);
     }
@@ -164,22 +168,25 @@ export default function DeckDetail() {
     if (selectedCollectionIds.length === 0) {
       setAllCards([]);
       setTotalCards(0);
+      setCollectionQuantities({});
       return;
     }
 
     try {
-      // Fetch all selected collections with their cards
       const responses = await Promise.all(
         selectedCollectionIds.map(id => api.get(`/collections/${id}`))
       );
 
-      // Combine all cards from all collections, removing duplicates
       const cardMap = new Map<string, Card>();
+      const qtyMap: Record<string, number> = {};
+
       responses.forEach(response => {
         const collection = response.data;
-        collection.cards?.forEach((item: { card: Card }) => {
+        collection.cards?.forEach((item: { card: Card; quantity: number }) => {
+          // Sum quantities across all selected collections
+          qtyMap[item.card.id] = (qtyMap[item.card.id] || 0) + item.quantity;
+
           if (!cardMap.has(item.card.id)) {
-            // Apply filters
             const matchesSearch = !search ||
               item.card.name.toLowerCase().includes(search.toLowerCase());
             const matchesType = !typeFilter ||
@@ -196,13 +203,14 @@ export default function DeckDetail() {
         });
       });
 
+      setCollectionQuantities(qtyMap);
       const cards = Array.from(cardMap.values());
       setCollectionAllCards(cards);
-      setAllCards(cards.slice(0, 50));
-      setCollectionDisplayCount(50);
+      setCollectionPage(1);
+      setAllCards(cards.slice(0, CARDS_PER_PAGE));
       setTotalCards(cards.length);
-    } catch (error) {
-      console.error('Failed to fetch collection cards:', error);
+    } catch {
+      // collection cards just won't load
     }
   }, [selectedCollectionIds, search, typeFilter, energyTypeFilter, deck?.format]);
 
@@ -233,6 +241,15 @@ export default function DeckDetail() {
 
   const addCardToDeck = async (cardId: string, cardName: string) => {
     setError('');
+    if (respectCollectionQty && cardSource === 'collections') {
+      const inCollection = collectionQuantities[cardId] || 0;
+      const inDeck = getCardQuantityInDeck(cardId);
+      if (inDeck >= inCollection) {
+        setError(`Only ${inCollection} ${cardName} in your collection`);
+        setTimeout(() => setError(''), 4000);
+        return;
+      }
+    }
     try {
       await api.post(`/decks/${deckId}/cards`, { cardId, quantity: 1 });
       fetchDeck();
@@ -291,16 +308,19 @@ export default function DeckDetail() {
       : 'bg-slate-700 text-slate-300';
   };
 
-  // Group deck cards by supertype
-  const groupedDeckCards = deck?.cards.reduce(
-    (acc, dc) => {
-      const type = dc.card.supertype || 'Other';
-      if (!acc[type]) acc[type] = [];
-      acc[type].push(dc);
-      return acc;
-    },
-    {} as Record<string, DeckCard[]>
-  );
+  // Group deck cards by supertype, sorted alphabetically for stable ordering
+  const groupedDeckCards = deck?.cards
+    .slice()
+    .sort((a, b) => a.card.name.localeCompare(b.card.name))
+    .reduce(
+      (acc, dc) => {
+        const type = dc.card.supertype || 'Other';
+        if (!acc[type]) acc[type] = [];
+        acc[type].push(dc);
+        return acc;
+      },
+      {} as Record<string, DeckCard[]>
+    );
 
   if (loading) {
     return (
@@ -327,7 +347,7 @@ export default function DeckDetail() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
 
       {/* Header */}
       <div className="bg-slate-800 border-b border-slate-700 px-4 py-2 flex-shrink-0">
@@ -377,22 +397,20 @@ export default function DeckDetail() {
       )}
 
       {/* Main Content - fills remaining height */}
-      <div className="flex-1 overflow-hidden p-4">
+      <div className="flex-1 overflow-hidden p-4 min-h-0">
         <div className="flex gap-4 h-full">
           {/* Left Panel - Card Browser */}
-          <div className="w-1/2 flex flex-col min-w-0">
-            <div className="bg-slate-800 rounded-lg p-4 flex flex-col h-full">
-              <h2 className="text-lg font-bold text-slate-100 mb-3">
+          <div className="flex-1 flex flex-col min-w-0 min-h-0">
+            <div className="bg-slate-800 rounded-lg p-3 flex flex-col h-full min-h-0">
+              <h2 className="text-sm font-bold text-slate-100 mb-2">
                 Add Cards
-                <span className="text-slate-400 text-sm font-normal ml-2">
-                  {deck.format === 'standard'
-                    ? '(Standard legal only)'
-                    : '(All cards)'}
+                <span className="text-slate-400 font-normal ml-2">
+                  {deck.format === 'standard' ? '(Standard legal only)' : '(All cards)'}
                 </span>
               </h2>
 
               {/* Card Source Toggle */}
-              <div className="flex gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-2">
                 <button
                   onClick={() => {
                     setCardSource('all');
@@ -421,6 +439,21 @@ export default function DeckDetail() {
                     </span>
                   )}
                 </button>
+                {cardSource === 'collections' && selectedCollectionIds.length > 0 && (
+                  <label className="ml-auto flex items-center gap-1.5 cursor-pointer select-none">
+                    <div
+                      onClick={() => setRespectCollectionQty(v => !v)}
+                      className={`relative w-8 h-4 rounded-full transition-colors ${
+                        respectCollectionQty ? 'bg-indigo-500' : 'bg-slate-600'
+                      }`}
+                    >
+                      <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${
+                        respectCollectionQty ? 'translate-x-4' : 'translate-x-0.5'
+                      }`} />
+                    </div>
+                    <span className="text-slate-300 text-xs whitespace-nowrap">Limit by collection qty</span>
+                  </label>
+                )}
               </div>
 
               {/* Selected Collections Display */}
@@ -450,19 +483,19 @@ export default function DeckDetail() {
               )}
 
               {/* Filters */}
-              <div className="flex flex-col gap-2 mb-4">
+              <div className="flex flex-col gap-1.5 mb-2">
                 <input
                   type="text"
                   placeholder="Search cards..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full p-2 rounded bg-slate-700 text-white border border-slate-600 focus:border-indigo-500 focus:outline-none text-sm"
+                  className="w-full px-2 py-1.5 rounded bg-slate-700 text-white border border-slate-600 focus:border-indigo-500 focus:outline-none text-sm"
                 />
-                <div className="flex gap-2">
+                <div className="flex gap-1.5">
                   <select
                     value={typeFilter}
                     onChange={(e) => setTypeFilter(e.target.value)}
-                    className="flex-1 p-2 rounded bg-slate-700 text-white border border-slate-600 text-sm"
+                    className="flex-1 px-2 py-1.5 rounded bg-slate-700 text-white border border-slate-600 text-sm"
                   >
                     <option value="">All Supertypes</option>
                     <option value="Pokémon">Pokémon</option>
@@ -472,7 +505,7 @@ export default function DeckDetail() {
                   <select
                     value={energyTypeFilter}
                     onChange={(e) => setEnergyTypeFilter(e.target.value)}
-                    className="flex-1 p-2 rounded bg-slate-700 text-white border border-slate-600 text-sm"
+                    className="flex-1 px-2 py-1.5 rounded bg-slate-700 text-white border border-slate-600 text-sm"
                   >
                     <option value="">All Types</option>
                     {['Fire','Water','Grass','Lightning','Psychic','Fighting','Darkness','Metal','Dragon','Fairy','Colorless'].map(t => (
@@ -482,7 +515,7 @@ export default function DeckDetail() {
                   <select
                     value={setFilter}
                     onChange={(e) => setSetFilter(e.target.value)}
-                    className="flex-1 p-2 rounded bg-slate-700 text-white border border-slate-600 text-sm"
+                    className="flex-1 px-2 py-1.5 rounded bg-slate-700 text-white border border-slate-600 text-sm"
                   >
                     <option value="">All Sets</option>
                     {(deck.format === 'standard' ? allSets.filter(s => s.standardLegal) : allSets).map(s => (
@@ -492,7 +525,7 @@ export default function DeckDetail() {
                   {(search || typeFilter || energyTypeFilter || setFilter) && (
                     <button
                       onClick={() => { setSearch(''); setTypeFilter(''); setEnergyTypeFilter(''); setSetFilter(''); }}
-                      className="px-3 py-2 rounded bg-red-700 hover:bg-red-600 text-white text-sm transition"
+                      className="px-2 py-1.5 rounded bg-red-700 hover:bg-red-600 text-white text-sm transition"
                     >
                       Clear
                     </button>
@@ -501,84 +534,135 @@ export default function DeckDetail() {
               </div>
 
               {/* Card Grid */}
-              <div className="grid grid-cols-5 gap-2 flex-1 overflow-y-auto pr-1">
-                {allCards.map((card) => {
-                  const qtyInDeck = getCardQuantityInDeck(card.id);
-                  return (
+              {(() => {
+                const displayCards = (cardSource === 'collections' && respectCollectionQty)
+                  ? allCards.filter(card =>
+                      (collectionQuantities[card.id] || 0) > getCardQuantityInDeck(card.id)
+                    )
+                  : allCards;
+                return (
+                  /* Scroll wrapper — handles overflow; grid inside is overflow:visible so scale-105 doesn't clip */
+                  <div className="flex-1 min-h-0 overflow-y-auto">
                     <div
-                      key={card.id}
-                      className="relative cursor-pointer group"
-                      onClick={() => addCardToDeck(card.id, card.name)}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                        gap: '12px',
+                        alignContent: 'start',
+                        padding: '4px',
+                      }}
                     >
-                      {card.imageSmall ? (
-                        <img
-                          src={card.imageSmall}
-                          alt={card.name}
-                          className={`w-full rounded transition hover:scale-105 ${
-                            qtyInDeck > 0
-                              ? 'ring-2 ring-indigo-500'
-                              : 'hover:ring-2 hover:ring-green-500'
-                          }`}
-                        />
-                      ) : (
-                        <div className={`w-full aspect-[2.5/3.5] rounded bg-slate-700 flex items-center justify-center ${
-                          qtyInDeck > 0 ? 'ring-2 ring-indigo-500' : ''
-                        }`}>
-                          <span className="text-slate-400 text-xs text-center px-1">{card.name}</span>
-                        </div>
-                      )}
-                      {/* Quantity Badge */}
-                      {qtyInDeck > 0 && (
-                        <div className="absolute top-1 right-1 bg-indigo-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                          {qtyInDeck}
-                        </div>
-                      )}
-                      {/* Card Name on Hover */}
-                      <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-80 text-white text-xs p-1 truncate opacity-0 group-hover:opacity-100 transition rounded-b">
-                        {card.name}
-                      </div>
+                      {displayCards.map((card) => {
+                        const qtyInDeck = getCardQuantityInDeck(card.id);
+                        const collectionQty = collectionQuantities[card.id] || 0;
+                        const remaining = collectionQty - qtyInDeck;
+                        return (
+                          <div
+                            key={card.id}
+                            className="relative cursor-pointer group"
+                            onClick={() => addCardToDeck(card.id, card.name)}
+                          >
+                            {card.imageSmall ? (
+                              <img
+                                src={card.imageSmall}
+                                alt={card.name}
+                                className={`w-full rounded transition hover:scale-105 ${
+                                  qtyInDeck > 0
+                                    ? 'ring-2 ring-indigo-500'
+                                    : 'hover:ring-2 hover:ring-green-500'
+                                }`}
+                              />
+                            ) : (
+                              <div className={`w-full aspect-[2.5/3.5] rounded bg-slate-700 flex items-center justify-center ${
+                                qtyInDeck > 0 ? 'ring-2 ring-indigo-500' : ''
+                              }`}>
+                                <span className="text-slate-400 text-xs text-center px-1">{card.name}</span>
+                              </div>
+                            )}
+                            {/* Deck quantity badge */}
+                            {qtyInDeck > 0 && (
+                              <div className="absolute top-1 right-1 bg-indigo-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                                {qtyInDeck}
+                              </div>
+                            )}
+                            {/* Collection remaining badge (only in limited mode) */}
+                            {cardSource === 'collections' && respectCollectionQty && collectionQty > 0 && (
+                              <div className="absolute top-1 left-1 bg-amber-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-full leading-none">
+                                {remaining} left
+                              </div>
+                            )}
+                            {/* Card name on hover */}
+                            <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-80 text-white text-xs p-1 truncate opacity-0 group-hover:opacity-100 transition rounded-b">
+                              {card.name}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })()}
 
-              {/* Load More / Card Count */}
-              <div className="mt-3 text-center">
-                <p className="text-slate-400 text-xs mb-2">
-                  Showing {allCards.length} of {totalCards} cards
-                  {cardSource === 'collections' && ' from selected collections'}
-                </p>
-                {cardSource === 'all' && allCards.length < totalCards && (
-                  <button
-                    onClick={() => fetchAllCards(cardPage + 1, true)}
-                    disabled={loadingMore}
-                    className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 text-white px-4 py-2 rounded-lg transition text-sm"
-                  >
-                    {loadingMore ? 'Loading...' : 'Load More Cards'}
-                  </button>
-                )}
-                {cardSource === 'collections' && allCards.length < totalCards && (
-                  <button
-                    onClick={() => {
-                      const newCount = collectionDisplayCount + 50;
-                      setCollectionDisplayCount(newCount);
-                      setAllCards(collectionAllCards.slice(0, newCount));
-                    }}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition text-sm"
-                  >
-                    Load More Cards
-                  </button>
-                )}
-              </div>
+              {/* Pagination */}
+              {(() => {
+                const totalPages = Math.ceil(totalCards / CARDS_PER_PAGE);
+                const currentPage = cardSource === 'all' ? cardPage : collectionPage;
+                const goToPrev = () => {
+                  if (cardSource === 'all') {
+                    fetchAllCards(cardPage - 1, false);
+                  } else {
+                    const p = collectionPage - 1;
+                    setCollectionPage(p);
+                    setAllCards(collectionAllCards.slice((p - 1) * CARDS_PER_PAGE, p * CARDS_PER_PAGE));
+                  }
+                };
+                const goToNext = () => {
+                  if (cardSource === 'all') {
+                    fetchAllCards(cardPage + 1, false);
+                  } else {
+                    const p = collectionPage + 1;
+                    setCollectionPage(p);
+                    setAllCards(collectionAllCards.slice((p - 1) * CARDS_PER_PAGE, p * CARDS_PER_PAGE));
+                  }
+                };
+                return (
+                  <div className="mt-2 flex flex-col items-center gap-1 flex-shrink-0">
+                    <p className="text-slate-500 text-xs">
+                      {totalCards} cards{cardSource === 'collections' && ' in collections'}
+                    </p>
+                    {totalPages > 1 && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={goToPrev}
+                          disabled={currentPage <= 1 || loadingMore}
+                          className="bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-white px-3 py-1 rounded-lg transition text-sm"
+                        >
+                          ← Prev
+                        </button>
+                        <span className="text-slate-400 text-sm min-w-[70px] text-center">
+                          {currentPage} / {totalPages}
+                        </span>
+                        <button
+                          onClick={goToNext}
+                          disabled={currentPage >= totalPages || loadingMore}
+                          className="bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-white px-3 py-1 rounded-lg transition text-sm"
+                        >
+                          {loadingMore ? '...' : 'Next →'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
           {/* Right Panel - Deck Contents */}
-          <div className="w-1/2 flex flex-col min-w-0">
-            <div className="bg-slate-800 rounded-lg p-4 flex flex-col h-full">
-              <h2 className="text-lg font-bold text-slate-100 mb-3 flex-shrink-0">
+          <div className="w-80 flex-shrink-0 flex flex-col min-h-0">
+            <div className="bg-slate-800 rounded-lg p-3 flex flex-col h-full min-h-0">
+              <h2 className="text-sm font-bold text-slate-100 mb-2 flex-shrink-0">
                 Deck Contents
-                <span className="text-slate-400 text-sm font-normal ml-2">({getTotalCards()} cards)</span>
+                <span className="text-slate-400 font-normal ml-2">({getTotalCards()} / 60)</span>
               </h2>
 
               {deck.cards.length === 0 ? (
@@ -596,7 +680,7 @@ export default function DeckDetail() {
                   t => (groupedDeckCards?.[t]?.length ?? 0) > 0
                 );
                 return (
-                  <div className="flex-1 overflow-y-auto pr-2">
+                  <div className="flex-1 overflow-y-auto pr-1 min-h-0">
                     {visibleTypes.flatMap((type, idx) => {
                       const reverseIdx = visibleTypes.length - 1 - idx;
                       const cards = groupedDeckCards![type];
@@ -616,9 +700,7 @@ export default function DeckDetail() {
                           <span className="text-slate-500 font-normal">({total})</span>
                         </div>,
                         ...(!collapsed[type] ? cards.map(dc => (
-                          <div key={dc.id} className="mt-1">
-                            <DeckCardRow deckCard={dc} onUpdateQuantity={updateCardQuantity} />
-                          </div>
+                          <DeckCardRow key={dc.id} deckCard={dc} onUpdateQuantity={updateCardQuantity} />
                         )) : []),
                       ];
                     })}
@@ -630,37 +712,6 @@ export default function DeckDetail() {
         </div>
       </div>
 
-
-      {/* Animations */}
-      <style>{`
-        @keyframes bubblePop {
-          0% {
-            opacity: 0;
-            transform: translateX(-50%) translateY(30px) scale(0.5);
-          }
-          50% {
-            transform: translateX(-50%) translateY(-5px) scale(1.05);
-          }
-          100% {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0) scale(1);
-          }
-        }
-        @keyframes modalFadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes modalSlideIn {
-          from {
-            opacity: 0;
-            transform: scale(0.95) translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-      `}</style>
 
       {/* Collection Picker Modal */}
       {showCollectionPicker && (
@@ -762,37 +813,28 @@ function DeckCardRow({
   onUpdateQuantity: (cardId: string, quantity: number) => void;
 }) {
   return (
-    <div
-      className="flex items-center gap-2 bg-slate-700 rounded p-2 hover:bg-slate-600 transition"
-    >
+    <div className="flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-slate-600 transition">
       <img
         src={deckCard.card.imageSmall}
         alt={deckCard.card.name}
-        className="w-10 h-14 object-cover rounded"
+        className="w-7 h-9 object-cover rounded flex-shrink-0"
       />
-      <div className="flex-1 min-w-0">
-        <p className="text-white text-sm truncate">{deckCard.card.name}</p>
-        <p className="text-slate-400 text-xs">
-          {deckCard.card.types?.join(', ') || deckCard.card.supertype}
-        </p>
-      </div>
-      <div className="flex items-center gap-1">
+      <span className="text-white text-xs flex-1 truncate min-w-0 leading-tight">
+        {deckCard.card.name}
+      </span>
+      <div className="flex items-center gap-0.5 flex-shrink-0">
         <button
-          onClick={() =>
-            onUpdateQuantity(deckCard.cardId, deckCard.quantity - 1)
-          }
-          className="bg-red-600 hover:bg-red-700 text-white w-6 h-6 rounded text-sm flex items-center justify-center"
+          onClick={() => onUpdateQuantity(deckCard.cardId, deckCard.quantity - 1)}
+          className="bg-red-600 hover:bg-red-700 text-white w-5 h-5 rounded text-xs flex items-center justify-center leading-none"
         >
-          -
+          −
         </button>
-        <span className="text-white font-bold w-6 text-center">
+        <span className="text-white text-xs font-bold w-4 text-center">
           {deckCard.quantity}
         </span>
         <button
-          onClick={() =>
-            onUpdateQuantity(deckCard.cardId, deckCard.quantity + 1)
-          }
-          className="bg-green-600 hover:bg-green-700 text-white w-6 h-6 rounded text-sm flex items-center justify-center"
+          onClick={() => onUpdateQuantity(deckCard.cardId, deckCard.quantity + 1)}
+          className="bg-green-600 hover:bg-green-700 text-white w-5 h-5 rounded text-xs flex items-center justify-center leading-none"
         >
           +
         </button>

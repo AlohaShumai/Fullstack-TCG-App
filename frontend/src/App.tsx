@@ -26,9 +26,9 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 function AppLayout() {
   const location = useLocation();
   return (
-    <div className="min-h-screen flex flex-col bg-slate-900">
+    <div className="h-screen overflow-hidden flex flex-col bg-slate-900">
       <Nav />
-      <div key={location.pathname} className="flex-1 flex flex-col page-enter">
+      <div key={location.pathname} className="flex-1 min-h-0 flex flex-col page-enter">
         <Outlet />
       </div>
     </div>

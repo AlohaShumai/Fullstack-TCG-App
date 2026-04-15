@@ -5,6 +5,18 @@ import OpenAI from 'openai';
 import { tavily, TavilyClient } from '@tavily/core';
 import { STANDARD_LEGAL_SETS, ROTATION_INFO } from '../config/rotation.config';
 
+export interface CardResult {
+  id: string;
+  name: string;
+  supertype: string;
+  types: string[];
+  hp: string | null;
+  abilities: unknown;
+  attacks: unknown;
+  setName: string;
+  similarity: number;
+}
+
 export interface CardData {
   id: string;
   name: string;
@@ -52,7 +64,7 @@ export interface GeneratedDeck {
   ownedPercentage: number;
 }
 
-interface ChatMessage {
+export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
@@ -772,6 +784,90 @@ Return a JSON object:
     return {
       topDecks: fallbackDecks,
       explanation: completion.choices[0].message.content || '',
+    };
+  }
+
+  async searchSimilarCards(
+    query: string,
+    userId: string,
+    limit: number = 5,
+  ): Promise<CardResult[]> {
+    const queryEmbedding = await this.generateEmbedding(query);
+    const embeddingStr = JSON.stringify(queryEmbedding);
+
+    return this.prisma.$queryRawUnsafe<CardResult[]>(
+      `SELECT
+        c.id,
+        c.name,
+        c.supertype,
+        c.types,
+        c.hp,
+        c.abilities,
+        c.attacks,
+        c."setName",
+        1 - (c.embedding <=> $1::vector) as similarity
+      FROM "Card" c
+      INNER JOIN "CollectionCard" cc ON cc."cardId" = c.id
+      INNER JOIN "Collection" col ON col.id = cc."collectionId"
+      WHERE col."userId" = $2
+        AND c.embedding IS NOT NULL
+      ORDER BY c.embedding <=> $1::vector
+      LIMIT $3`,
+      embeddingStr,
+      userId,
+      limit,
+    );
+  }
+
+  async getAdvice(
+    userId: string,
+    question: string,
+  ): Promise<{ answer: string; relevantCards: string[] }> {
+    const similarCards = await this.searchSimilarCards(question, userId, 5);
+
+    if (similarCards.length === 0) {
+      return {
+        answer:
+          'I could not find any relevant cards in your collection. Try adding more cards or asking a different question.',
+        relevantCards: [],
+      };
+    }
+
+    const cardContext = similarCards
+      .map((card) =>
+        this.cardToText({
+          ...card,
+          subtypes: [],
+          rules: [],
+          legalities: null,
+          imageSmall: null,
+        }),
+      )
+      .join('\n\n');
+
+    const prompt =
+      'You are a Pokemon TCG deck building advisor. The user has the following relevant cards in their collection:\n\n' +
+      cardContext +
+      '\n\nUser question: ' +
+      question +
+      '\n\nBased on these cards, provide helpful deck building advice. Be specific about which cards to use and why. Keep your response concise but informative.';
+
+    const completion = await this.openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are an expert Pokemon TCG deck builder who helps players optimize their decks based on the cards they own.',
+        },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 500,
+    });
+
+    return {
+      answer: completion.choices[0].message.content || 'No advice generated.',
+      relevantCards: similarCards.map((c) => c.name),
     };
   }
 

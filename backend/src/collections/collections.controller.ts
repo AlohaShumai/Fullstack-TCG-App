@@ -11,14 +11,8 @@ import {
 } from '@nestjs/common';
 import { CollectionsService } from './collections.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-
-interface AuthRequest {
-  user: {
-    id: string;
-    email: string;
-    role: string;
-  };
-}
+import type { AuthRequest } from '../common/types';
+import { CreateCollectionDto, PatchCollectionDto, AddToCollectionDto, UpdateCollectionDto } from './dto/collection.dto';
 
 @Controller('collections')
 @UseGuards(JwtAuthGuard)
@@ -56,9 +50,9 @@ export class CollectionsController {
   @Post()
   async createCollection(
     @Request() req: AuthRequest,
-    @Body() body: { name: string; description?: string; isPublic?: boolean },
+    @Body() dto: CreateCollectionDto,
   ) {
-    return this.collectionsService.createCollection(req.user.id, body);
+    return this.collectionsService.createCollection(req.user.id, dto);
   }
 
   // Update a collection's details
@@ -66,12 +60,12 @@ export class CollectionsController {
   async updateCollection(
     @Request() req: AuthRequest,
     @Param('collectionId') collectionId: string,
-    @Body() body: { name?: string; description?: string; isPublic?: boolean },
+    @Body() dto: PatchCollectionDto,
   ) {
     return this.collectionsService.updateCollection(
       req.user.id,
       collectionId,
-      body,
+      dto,
     );
   }
 
@@ -89,13 +83,13 @@ export class CollectionsController {
   async addToCollection(
     @Request() req: AuthRequest,
     @Param('collectionId') collectionId: string,
-    @Body() body: { cardId: string; quantity?: number },
+    @Body() dto: AddToCollectionDto,
   ): Promise<unknown> {
     return this.collectionsService.addToCollection(
       req.user.id,
       collectionId,
-      body.cardId,
-      body.quantity || 1,
+      dto.cardId,
+      dto.quantity ?? 1,
     );
   }
 
@@ -105,13 +99,13 @@ export class CollectionsController {
     @Request() req: AuthRequest,
     @Param('collectionId') collectionId: string,
     @Param('cardId') cardId: string,
-    @Body() body: { quantity: number },
+    @Body() dto: UpdateCollectionDto,
   ): Promise<unknown> {
     return this.collectionsService.updateCardQuantity(
       req.user.id,
       collectionId,
       cardId,
-      body.quantity,
+      dto.quantity,
     );
   }
 

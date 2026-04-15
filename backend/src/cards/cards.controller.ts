@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { CardsService } from './cards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../auth/guards/admin.guard';
 
 @Controller('cards')
 export class CardsController {
@@ -58,14 +59,14 @@ export class CardsController {
   }
 
   @Post('sync/standard')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   async syncStandardCards(@Query('pages') pages?: string) {
     const pageCount = pages ? parseInt(pages, 10) : 5;
     return this.cardsService.syncStandardCards(pageCount);
   }
 
   @Post('sync/set')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   async syncSet(@Query('name') setName: string) {
     if (!setName) {
       throw new BadRequestException('Set name is required');
@@ -74,7 +75,7 @@ export class CardsController {
   }
 
   @Post('sync/set-id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   async syncSetById(@Query('id') setId: string) {
     if (!setId) {
       throw new BadRequestException('Set ID is required');

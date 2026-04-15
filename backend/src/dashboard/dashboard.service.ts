@@ -35,6 +35,7 @@ export interface FeaturedCard {
   types: string[];
   setName: string;
   imageSmall: string;
+  imageLarge?: string;
 }
 
 export interface DashboardStats {
@@ -44,7 +45,7 @@ export interface DashboardStats {
   uniquePokemon: number;
   cardsByType: { pokemon: number; trainer: number; energy: number };
   decks: DeckSummary[];
-  featuredCard: FeaturedCard | null;
+  featuredCards: FeaturedCard[];
 }
 
 @Injectable()
@@ -152,9 +153,10 @@ export class DashboardService {
       }
     }
 
-    let featuredCard: FeaturedCard | null = null;
+    const featuredCards: FeaturedCard[] = [];
     if (cardCount > 0) {
-      const skip = Math.floor(Math.random() * cardCount);
+      const poolSize = Math.min(10, cardCount);
+      const skip = Math.floor(Math.random() * Math.max(1, cardCount - poolSize));
       const rows = await this.prisma.collectionCard.findMany({
         where: { collection: { userId }, card: { imageSmall: { not: null } } },
         select: {
@@ -166,14 +168,21 @@ export class DashboardService {
               types: true,
               setName: true,
               imageSmall: true,
+              imageLarge: true,
             },
           },
         },
         skip,
-        take: 1,
+        take: poolSize,
       });
-      if (rows[0]?.card?.imageSmall) {
-        featuredCard = rows[0].card as FeaturedCard;
+      // Shuffle and deduplicate by card id
+      const seen = new Set<string>();
+      const shuffled = rows.sort(() => Math.random() - 0.5);
+      for (const row of shuffled) {
+        if (row.card?.imageSmall && !seen.has(row.card.id)) {
+          seen.add(row.card.id);
+          featuredCards.push(row.card as FeaturedCard);
+        }
       }
     }
 
@@ -183,7 +192,7 @@ export class DashboardService {
       decksCount,
       uniquePokemon: pokemonCardIds.size,
       cardsByType,
-      featuredCard,
+      featuredCards,
       decks: decks.map((d) => ({
         id: d.id,
         name: d.name,
@@ -216,7 +225,7 @@ export class DashboardService {
         } as Parameters<TavilyClient['search']>[1],
       );
 
-      console.log('[Dashboard] Tavily news results:', JSON.stringify(
+      this.logger.debug('[Dashboard] Tavily news results: ' + JSON.stringify(
         response.results.map((r) => ({
           title: r.title,
           url: r.url,
@@ -282,7 +291,7 @@ export class DashboardService {
         } as Parameters<TavilyClient['search']>[1],
       );
 
-      console.log('[Dashboard] Tavily events results:', JSON.stringify(
+      this.logger.debug('[Dashboard] Tavily events results: ' + JSON.stringify(
         response.results.map((r) => ({
           title: r.title,
           url: r.url,

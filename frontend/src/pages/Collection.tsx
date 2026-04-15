@@ -63,8 +63,8 @@ export default function CollectionPage() {
       if (response.data.length > 0) {
         await selectCollection(response.data[0].id);
       }
-    } catch (error) {
-      console.error('Failed to fetch collections:', error);
+    } catch {
+      showNotification('Failed to load collections', true);
     } finally {
       setLoading(false);
     }
@@ -84,8 +84,8 @@ export default function CollectionPage() {
       ]);
       setSelectedCollection(collectionRes.data);
       setStats(statsRes.data);
-    } catch (error) {
-      console.error('Failed to fetch collection:', error);
+    } catch {
+      showNotification('Failed to load collection', true);
     }
   };
 
@@ -106,8 +106,7 @@ export default function CollectionPage() {
       setNewCollectionPublic(false);
       fetchCollections();
       showNotification('Collection created!');
-    } catch (error) {
-      console.error('Failed to create collection:', error);
+    } catch {
       showNotification('Failed to create collection', true);
     }
   };
@@ -124,8 +123,7 @@ export default function CollectionPage() {
       fetchCollections();
       selectCollection(selectedCollection.id);
       showNotification('Collection updated!');
-    } catch (error) {
-      console.error('Failed to update collection:', error);
+    } catch {
       showNotification('Failed to update collection', true);
     }
   };
@@ -139,8 +137,7 @@ export default function CollectionPage() {
       setStats(null);
       fetchCollections();
       showNotification('Collection deleted');
-    } catch (error) {
-      console.error('Failed to delete collection:', error);
+    } catch {
       showNotification('Failed to delete collection', true);
     }
   };
@@ -154,8 +151,8 @@ export default function CollectionPage() {
         await api.patch(`/collections/${selectedCollection.id}/cards/${cardId}`, { quantity });
       }
       selectCollection(selectedCollection.id);
-    } catch (error) {
-      console.error('Failed to update quantity:', error);
+    } catch {
+      showNotification('Failed to update quantity', true);
     }
   };
 
@@ -183,8 +180,7 @@ export default function CollectionPage() {
       setDecks(response.data);
       setPendingCard({ id: cardId, name: cardName });
       setShowDeckPicker(true);
-    } catch (error) {
-      console.error('Failed to fetch decks:', error);
+    } catch {
       showNotification('Failed to load decks', true);
     }
   };
@@ -215,7 +211,7 @@ export default function CollectionPage() {
   }
 
   return (
-    <div className="flex-1">
+    <div className="flex-1 min-h-0 overflow-y-auto">
 
       {message && (
         <div
@@ -231,19 +227,6 @@ export default function CollectionPage() {
           <span>{message}</span>
         </div>
       )}
-
-      <style>{`
-        @keyframes bubblePop {
-          0% { opacity: 0; transform: translateX(-50%) translateY(30px) scale(0.5); }
-          50% { transform: translateX(-50%) translateY(-5px) scale(1.05); }
-          100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
-        }
-        @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes modalSlideIn {
-          from { opacity: 0; transform: scale(0.95) translateY(-10px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-      `}</style>
 
       <div className="container mx-auto p-4 sm:p-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">

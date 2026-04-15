@@ -1,18 +1,163 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { UsersService } from '../users/users.service';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import * as bcrypt from 'bcrypt';
+
+// bcrypt is a CommonJS module whose properties aren't configurable,
+// so jest.spyOn can't override them. Mocking the whole module lets
+// us control compare() return values per test.
+jest.mock('bcrypt');
+
+const mockUsersService = {
+  findByEmail: jest.fn(),
+  findById: jest.fn(),
+  create: jest.fn(),
+  updateRefreshToken: jest.fn(),
+};
+
+const mockJwtService = {
+  signAsync: jest.fn(),
+};
+
+const mockConfigService = {
+  get: jest.fn(),
+};
 
 describe('AuthService', () => {
   let service: AuthService;
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [AuthService],
-    }).compile();
+  beforeEach(() => {
+    service = new AuthService(
+      mockUsersService as unknown as UsersService,
+      mockJwtService as unknown as JwtService,
+      mockConfigService as unknown as ConfigService,
+    );
+    jest.clearAllMocks();
 
-    service = module.get<AuthService>(AuthService);
+    // Defaults that satisfy generateTokens() in every test
+    mockConfigService.get.mockReturnValue('test-secret');
+    mockJwtService.signAsync.mockResolvedValue('fake-token');
+    mockUsersService.updateRefreshToken.mockResolvedValue(undefined);
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
+  // ------------------------------------------------------------------ //
+  // register
+  // ------------------------------------------------------------------ //
+  describe('register', () => {
+    it('should return tokens when registering a new email', async () => {
+      mockUsersService.findByEmail.mockResolvedValue(null);
+      mockUsersService.create.mockResolvedValue({
+        id: 'user-1',
+        email: 'user@test.com',
+        role: 'user',
+      });
+
+      const result = await service.register('user@test.com', 'password123');
+
+      expect(result.accessToken).toBe('fake-token');
+      expect(result.refreshToken).toBe('fake-token');
+    });
+
+    it('should throw UnauthorizedException if email is already registered', async () => {
+      mockUsersService.findByEmail.mockResolvedValue({
+        id: 'user-1',
+        email: 'user@test.com',
+      });
+
+      await expect(
+        service.register('user@test.com', 'password123'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  // ------------------------------------------------------------------ //
+  // login
+  // ------------------------------------------------------------------ //
+  describe('login', () => {
+    it('should return tokens when credentials are valid', async () => {
+      mockUsersService.findByEmail.mockResolvedValue({
+        id: 'user-1',
+        email: 'user@test.com',
+        password: 'hashed-password',
+        role: 'user',
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      const result = await service.login('user@test.com', 'password123');
+
+      expect(result.accessToken).toBe('fake-token');
+      expect(result.refreshToken).toBe('fake-token');
+    });
+
+    it('should throw UnauthorizedException when password is wrong', async () => {
+      mockUsersService.findByEmail.mockResolvedValue({
+        id: 'user-1',
+        email: 'user@test.com',
+        password: 'hashed-password',
+        role: 'user',
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.login('user@test.com', 'wrongpassword'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException when email does not exist', async () => {
+      mockUsersService.findByEmail.mockResolvedValue(null);
+
+      await expect(
+        service.login('nobody@test.com', 'password123'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  // ------------------------------------------------------------------ //
+  // refresh
+  // ------------------------------------------------------------------ //
+  describe('refresh', () => {
+    it('should return new tokens when refresh token is valid', async () => {
+      mockUsersService.findById.mockResolvedValue({
+        id: 'user-1',
+        email: 'user@test.com',
+        role: 'user',
+        refreshToken: 'hashed-refresh-token',
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      const result = await service.refresh('user-1', 'raw-refresh-token');
+
+      expect(result.accessToken).toBe('fake-token');
+      expect(result.refreshToken).toBe('fake-token');
+    });
+
+    it('should throw UnauthorizedException when refresh token is invalid', async () => {
+      mockUsersService.findById.mockResolvedValue({
+        id: 'user-1',
+        email: 'user@test.com',
+        role: 'user',
+        refreshToken: 'hashed-refresh-token',
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.refresh('user-1', 'wrong-token'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException when user has no stored refresh token', async () => {
+      mockUsersService.findById.mockResolvedValue({
+        id: 'user-1',
+        email: 'user@test.com',
+        role: 'user',
+        refreshToken: null,
+      });
+
+      await expect(
+        service.refresh('user-1', 'any-token'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
   });
 });

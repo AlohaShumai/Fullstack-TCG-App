@@ -17,14 +17,7 @@ import {
   AddCardToDeckDto,
   UpdateDeckCardDto,
 } from './dto/deck.dto';
-
-interface AuthRequest {
-  user: {
-    id: string;
-    email: string;
-    role: string;
-  };
-}
+import type { AuthRequest } from '../common/types';
 
 @Controller('decks')
 @UseGuards(JwtAuthGuard)

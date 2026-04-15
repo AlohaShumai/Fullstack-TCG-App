@@ -28,6 +28,14 @@ export default function Decks() {
   const [newDeckName, setNewDeckName] = useState('');
   const [newDeckFormat, setNewDeckFormat] = useState('unlimited');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [notification, setNotification] = useState('');
+  const [notifError, setNotifError] = useState(false);
+
+  const showNotification = (msg: string, isError = false) => {
+    setNotification(msg);
+    setNotifError(isError);
+    setTimeout(() => setNotification(''), isError ? 4000 : 2500);
+  };
 
   useEffect(() => {
     fetchDecks();
@@ -37,8 +45,8 @@ export default function Decks() {
     try {
       const response = await api.get('/decks');
       setDecks(response.data);
-    } catch (error) {
-      console.error('Failed to fetch decks:', error);
+    } catch {
+      showNotification('Failed to load decks', true);
     } finally {
       setLoading(false);
     }
@@ -52,8 +60,8 @@ export default function Decks() {
       setNewDeckFormat('unlimited');
       setShowCreateForm(false);
       fetchDecks();
-    } catch (error) {
-      console.error('Failed to create deck:', error);
+    } catch {
+      showNotification('Failed to create deck', true);
     }
   };
 
@@ -62,8 +70,8 @@ export default function Decks() {
     try {
       await api.delete(`/decks/${deckId}`);
       fetchDecks();
-    } catch (error) {
-      console.error('Failed to delete deck:', error);
+    } catch {
+      showNotification('Failed to delete deck', true);
     }
   };
 
@@ -83,7 +91,22 @@ export default function Decks() {
   }
 
   return (
-    <div className="flex-1">
+    <div className="flex-1 min-h-0 overflow-y-auto">
+
+      {notification && (
+        <div
+          className={`fixed bottom-6 left-1/2 text-white text-center py-3 px-5 rounded-full shadow-xl z-50 flex items-center gap-2 ${
+            notifError ? 'bg-red-700' : 'bg-green-700'
+          }`}
+          style={{
+            transform: 'translateX(-50%)',
+            animation: 'bubblePop 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+          }}
+        >
+          <span>{notifError ? '✕' : '✓'}</span>
+          <span>{notification}</span>
+        </div>
+      )}
 
       <div className="container mx-auto p-4 sm:p-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">

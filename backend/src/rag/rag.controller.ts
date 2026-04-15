@@ -6,25 +6,18 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { RagService } from './rag.service';
+import { AiService } from '../ai/ai.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-
-interface AuthRequest {
-  user: {
-    id: string;
-    email: string;
-    role: string;
-  };
-}
+import type { AuthRequest } from '../common/types';
 
 @Controller('rag')
 @UseGuards(JwtAuthGuard)
 export class RagController {
-  constructor(private ragService: RagService) {}
+  constructor(private aiService: AiService) {}
 
   @Post('embed')
   async embedAllCards() {
-    return this.ragService.embedAllCards();
+    return this.aiService.embedAllCards();
   }
 
   @Get('advice')
@@ -35,7 +28,7 @@ export class RagController {
     if (!question) {
       return { error: 'Question is required' };
     }
-    return this.ragService.getAdvice(req.user.id, question);
+    return this.aiService.getAdvice(req.user.id, question);
   }
 
   @Get('search')
@@ -43,6 +36,6 @@ export class RagController {
     if (!query) {
       return { error: 'Query is required' };
     }
-    return this.ragService.searchSimilarCards(query, req.user.id);
+    return this.aiService.searchSimilarCards(query, req.user.id);
   }
 }
