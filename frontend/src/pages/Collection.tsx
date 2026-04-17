@@ -356,6 +356,7 @@ export default function CollectionPage() {
                         src={item.card.imageSmall}
                         alt={item.card.name}
                         className="w-full rounded mb-2"
+                        onError={(e) => { (e.target as HTMLImageElement).src = '/card-placeholder.svg'; }}
                       />
                       <button
                         onClick={() => openDeckPicker(item.cardId, item.card.name)}

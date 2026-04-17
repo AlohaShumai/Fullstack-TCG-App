@@ -571,6 +571,7 @@ export default function DeckDetail() {
                                     ? 'ring-2 ring-indigo-500'
                                     : 'hover:ring-2 hover:ring-green-500'
                                 }`}
+                                onError={(e) => { (e.target as HTMLImageElement).src = '/card-placeholder.svg'; }}
                               />
                             ) : (
                               <div className={`w-full aspect-[2.5/3.5] rounded bg-slate-700 flex items-center justify-center ${
@@ -818,6 +819,7 @@ function DeckCardRow({
         src={deckCard.card.imageSmall}
         alt={deckCard.card.name}
         className="w-7 h-9 object-cover rounded flex-shrink-0"
+        onError={(e) => { (e.target as HTMLImageElement).src = '/card-placeholder.svg'; }}
       />
       <span className="text-white text-xs flex-1 truncate min-w-0 leading-tight">
         {deckCard.card.name}

@@ -499,6 +499,7 @@ export default function Cards() {
                 src={card.imageSmall}
                 alt={card.name}
                 className="w-full rounded mb-2"
+                onError={(e) => { (e.target as HTMLImageElement).src = '/card-placeholder.svg'; }}
               />
               <h3 className="text-slate-100 font-semibold text-xs sm:text-sm truncate">
                 {card.name}
@@ -578,6 +579,7 @@ export default function Cards() {
                     src={selectedCard.imageLarge}
                     alt={selectedCard.name}
                     className="w-full rounded-lg"
+                    onError={(e) => { (e.target as HTMLImageElement).src = '/card-placeholder.svg'; }}
                   />
                   <button
                     onClick={() =>

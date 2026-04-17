@@ -215,6 +215,7 @@ export default function Decks() {
                         src={deckCard.card.imageSmall}
                         alt={deckCard.card.name}
                         className="w-10 sm:w-12 h-auto rounded"
+                        onError={(e) => { (e.target as HTMLImageElement).src = '/card-placeholder.svg'; }}
                       />
                     ))}
                     {deck.cards.length > 5 && (

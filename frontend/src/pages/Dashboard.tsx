@@ -365,6 +365,7 @@ export default function Dashboard() {
                       className="w-full max-w-[160px] rounded-lg mb-3 cursor-pointer hover:scale-110 transition-all duration-300"
                       style={{ boxShadow: '0 0 20px rgba(255,255,255,0.3)' }}
                       onClick={() => setFeaturedCardOpen(true)}
+                      onError={(e) => { (e.target as HTMLImageElement).src = '/card-placeholder.svg'; }}
                     />
                     <p className="text-white text-sm font-semibold text-center">{card.name}</p>
                     <p className="text-slate-400 text-xs text-center mt-0.5">
@@ -534,6 +535,7 @@ export default function Dashboard() {
               src={stats.featuredCards[featuredIndex].imageLarge ?? stats.featuredCards[featuredIndex].imageSmall}
               alt={stats.featuredCards[featuredIndex].name}
               className="rounded-xl max-h-[85vh] w-auto"
+              onError={(e) => { (e.target as HTMLImageElement).src = '/card-placeholder.svg'; }}
               style={{
                 boxShadow: '0 0 60px rgba(255,255,255,0.25)',
                 animation: 'modalSlideIn 0.25s ease-out',
