@@ -1,4 +1,4 @@
-import { useState, useEffect, type MouseEvent } from 'react';
+import { useState, useEffect, useRef, type MouseEvent } from 'react';
 import api from '../services/api';
 
 interface Attack {
@@ -59,6 +59,8 @@ export default function Cards() {
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [typeFilter, setTypeFilter] = useState('');
   const [supertypeFilter, setSupertypeFilter] = useState('');
   const [setFilter, setSetFilter] = useState('');
@@ -99,8 +101,13 @@ export default function Cards() {
   }, []);
 
   useEffect(() => {
-    fetchCards(1, search, typeFilter, supertypeFilter, setFilter, formatFilter);
-  }, [search, typeFilter, supertypeFilter, setFilter, formatFilter]);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => setDebouncedSearch(search), 300);
+  }, [search]);
+
+  useEffect(() => {
+    fetchCards(1, debouncedSearch, typeFilter, supertypeFilter, setFilter, formatFilter);
+  }, [debouncedSearch, typeFilter, supertypeFilter, setFilter, formatFilter]);
 
   const fetchSets = async () => {
     try {
@@ -246,6 +253,7 @@ export default function Cards() {
 
   const clearFilters = () => {
     setSearch('');
+    setDebouncedSearch('');
     setTypeFilter('');
     setSupertypeFilter('');
     setSetFilter('');
