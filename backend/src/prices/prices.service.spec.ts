@@ -60,6 +60,63 @@ describe('PricesService', () => {
     });
   });
 
+  describe('extractLocalId', () => {
+    it.each([
+      ['sv03-013', 'sv03', '13'],
+      ['sv03-198', 'sv03', '198'],
+      ['sv03-TG01', 'sv03', 'TG01'],
+      ['swsh01-001', 'swsh01', '1'],
+      ['base1-4', 'base1', '4'],
+    ])('%s → %s', (cardId, setId, expected) => {
+      expect((service as any).extractLocalId(cardId, setId)).toBe(expected);
+    });
+  });
+
+  describe('same-name different-number cards get distinct prices', () => {
+    it('assigns correct prices to common and illustration rare Sprigatito', async () => {
+      mockPrisma.card.findMany.mockResolvedValue([
+        { id: 'sv03-013', name: 'Sprigatito' },
+        { id: 'sv03-198', name: 'Sprigatito' },
+      ]);
+
+      mockHttpService.get.mockReturnValue(
+        makeApiResponse([
+          {
+            id: 'sv3-13',
+            name: 'Sprigatito',
+            number: '13',
+            set: { id: 'sv3', name: 'Paldea Evolved' },
+            tcgplayer: {
+              url: 'https://www.tcgplayer.com/product/common',
+              prices: { normal: { low: 0.1, mid: 0.2, high: 0.5, market: 0.15 } },
+            },
+          },
+          {
+            id: 'sv3-198',
+            name: 'Sprigatito',
+            number: '198',
+            set: { id: 'sv3', name: 'Paldea Evolved' },
+            tcgplayer: {
+              url: 'https://www.tcgplayer.com/product/illus-rare',
+              prices: { holofoil: { low: 8.0, mid: 12.0, high: 20.0, market: 10.0 } },
+            },
+          },
+        ]),
+      );
+
+      await (service as any).syncSetPrices('sv03');
+
+      const upsertCalls = mockPrisma.cardPrice.upsert.mock.calls;
+      expect(upsertCalls).toHaveLength(2);
+
+      const commonCall = upsertCalls.find((c: any) => c[0].where.cardId === 'sv03-013');
+      const illusCall = upsertCalls.find((c: any) => c[0].where.cardId === 'sv03-198');
+
+      expect(commonCall[0].create).toMatchObject({ marketPrice: 0.15 });
+      expect(illusCall[0].create).toMatchObject({ marketPrice: 10.0 });
+    });
+  });
+
   describe('syncCardPrice', () => {
     it('should upsert price data when the API returns a matching card', async () => {
       mockPrisma.card.findUnique.mockResolvedValue({

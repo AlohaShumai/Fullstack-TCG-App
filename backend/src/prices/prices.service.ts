@@ -15,6 +15,7 @@ interface PriceVariant {
 interface PokemonTcgCard {
   id: string;
   name: string;
+  number: string;
   set: { id: string; name: string };
   tcgplayer?: {
     url?: string;
@@ -95,12 +96,16 @@ export class PricesService {
     }
 
     const apiCards = await this.fetchSetFromApi(card.setId);
+    const numberMap = this.buildNumberMap(apiCards);
     const nameMap = this.buildNameMap(apiCards);
-    const match = nameMap.get(card.name.toLowerCase());
+
+    const localNumber = this.extractLocalId(cardId, card.setId);
+    const match =
+      numberMap.get(localNumber) ?? nameMap.get(card.name.toLowerCase());
 
     if (!match) {
       this.logger.warn(
-        `No pokemontcg.io match for "${card.name}" in set ${card.setId}`,
+        `No pokemontcg.io match for "${card.name}" (#${localNumber}) in set ${card.setId}`,
       );
       return;
     }
@@ -122,13 +127,17 @@ export class PricesService {
       }),
     ]);
 
+    const numberMap = this.buildNumberMap(apiCards);
     const nameMap = this.buildNameMap(apiCards);
 
     for (const localCard of localCards) {
-      const match = nameMap.get(localCard.name.toLowerCase());
+      const localNumber = this.extractLocalId(localCard.id, setId);
+      const match =
+        numberMap.get(localNumber) ?? nameMap.get(localCard.name.toLowerCase());
+
       if (!match) {
         this.logger.warn(
-          `No pokemontcg.io match for "${localCard.name}" in set ${setId}`,
+          `No pokemontcg.io match for "${localCard.name}" (#${localNumber}) in set ${setId}`,
         );
         skipped++;
         continue;
@@ -172,12 +181,32 @@ export class PricesService {
     return cards;
   }
 
+  private extractLocalId(cardId: string, setId: string): string {
+    const localId = cardId.startsWith(setId + '-')
+      ? cardId.slice(setId.length + 1)
+      : cardId.split('-').slice(1).join('-');
+    // Strip leading zeros so "013" matches pokemontcg.io "13", but "TG01" stays "TG01"
+    return localId.replace(/^0+(\d)/, '$1');
+  }
+
+  private buildNumberMap(
+    cards: PokemonTcgCard[],
+  ): Map<string, PokemonTcgCard> {
+    const map = new Map<string, PokemonTcgCard>();
+    for (const card of cards) {
+      map.set(card.number, card);
+    }
+    return map;
+  }
+
   private buildNameMap(
     cards: PokemonTcgCard[],
   ): Map<string, PokemonTcgCard> {
     const map = new Map<string, PokemonTcgCard>();
     for (const card of cards) {
-      map.set(card.name.toLowerCase(), card);
+      if (!map.has(card.name.toLowerCase())) {
+        map.set(card.name.toLowerCase(), card);
+      }
     }
     return map;
   }
