@@ -141,8 +141,14 @@ export default function Cards() {
       return;
     }
     setPriceHistoryLoading(true);
-    api.get(`/cards/${selectedCard.id}/price-history`)
-      .then((res) => setPriceHistory(res.data))
+    Promise.all([
+      api.get(`/cards/${selectedCard.id}`),
+      api.get(`/cards/${selectedCard.id}/price-history`),
+    ])
+      .then(([detailRes, historyRes]) => {
+        setSelectedCard((prev) => prev ? { ...prev, prices: detailRes.data.prices ?? null } : prev);
+        setPriceHistory(historyRes.data);
+      })
       .catch(() => setPriceHistory([]))
       .finally(() => setPriceHistoryLoading(false));
   }, [selectedCard?.id]);
