@@ -799,7 +799,7 @@ export default function Cards() {
                             width={45}
                           />
                           <Tooltip
-                            formatter={(v: number) => [`$${v.toFixed(2)}`, 'Market']}
+                            formatter={(v) => v != null ? [`$${(v as number).toFixed(2)}`, 'Market'] : ['—', 'Market']}
                             labelFormatter={(l) => `Date: ${l}`}
                             contentStyle={{ background: '#1e293b', border: 'none', fontSize: 12 }}
                           />
