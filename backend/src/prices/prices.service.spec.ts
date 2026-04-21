@@ -47,6 +47,19 @@ describe('PricesService', () => {
     mockPrisma.priceSnapshot.create.mockResolvedValue({});
   });
 
+  describe('toPokemonTcgSetId', () => {
+    it.each([
+      ['sv03', 'sv3'],
+      ['sv03pt5', 'sv3pt5'],
+      ['swsh01', 'swsh1'],
+      ['sv3', 'sv3'],
+      ['swsh12', 'swsh12'],
+      ['base1', 'base1'],
+    ])('maps %s → %s', (input, expected) => {
+      expect((service as any).toPokemonTcgSetId(input)).toBe(expected);
+    });
+  });
+
   describe('syncCardPrice', () => {
     it('should upsert price data when the API returns a matching card', async () => {
       mockPrisma.card.findUnique.mockResolvedValue({

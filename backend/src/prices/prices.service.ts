@@ -140,7 +140,16 @@ export class PricesService {
     return { synced, skipped };
   }
 
+  private toPokemonTcgSetId(tcgdexSetId: string): string {
+    return tcgdexSetId.replace(/^([a-z]+)0+(\d)/, '$1$2');
+  }
+
   private async fetchSetFromApi(setId: string): Promise<PokemonTcgCard[]> {
+    const apiSetId = this.toPokemonTcgSetId(setId);
+    if (apiSetId !== setId) {
+      this.logger.log(`Set ID mapped: ${setId} → ${apiSetId}`);
+    }
+
     const cards: PokemonTcgCard[] = [];
     let page = 1;
     const pageSize = 250;
@@ -148,7 +157,7 @@ export class PricesService {
     while (true) {
       const response = await firstValueFrom(
         this.httpService.get<PokemonTcgResponse>(`${this.apiUrl}/cards`, {
-          params: { q: `set.id:${setId}`, pageSize, page },
+          params: { q: `set.id:${apiSetId}`, pageSize, page },
           headers: this.apiKey ? { 'X-Api-Key': this.apiKey } : {},
           timeout: 30000,
         }),
