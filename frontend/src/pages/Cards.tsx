@@ -1,4 +1,12 @@
 import { useState, useEffect, useRef, type MouseEvent } from 'react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 import api from '../services/api';
 
 interface Attack {
@@ -20,6 +28,20 @@ interface Legalities {
   unlimited?: string;
 }
 
+interface CardPrice {
+  marketPrice: number | null;
+  lowPrice: number | null;
+  midPrice: number | null;
+  highPrice: number | null;
+  tcgplayerUrl: string | null;
+  updatedAt: string;
+}
+
+interface PricePoint {
+  date: string;
+  price: number | null;
+}
+
 interface Card {
   id: string;
   name: string;
@@ -38,6 +60,7 @@ interface Card {
   retreatCost: string[];
   rules: string[];
   legalities: Legalities | null;
+  prices?: CardPrice | null;
 }
 
 interface SetWithLegality {
@@ -74,6 +97,9 @@ export default function Cards() {
   const [rotationInfo, setRotationInfo] = useState<RotationInfo | null>(null);
   const [showRotationInfo, setShowRotationInfo] = useState(false);
 
+  const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
+  const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
+
   // Collection picker state
   const [showCollectionPicker, setShowCollectionPicker] = useState(false);
   const [collections, setCollections] = useState<{ id: string; name: string }[]>([]);
@@ -108,6 +134,18 @@ export default function Cards() {
   useEffect(() => {
     fetchCards(1, debouncedSearch, typeFilter, supertypeFilter, setFilter, formatFilter);
   }, [debouncedSearch, typeFilter, supertypeFilter, setFilter, formatFilter]);
+
+  useEffect(() => {
+    if (!selectedCard) {
+      setPriceHistory([]);
+      return;
+    }
+    setPriceHistoryLoading(true);
+    api.get(`/cards/${selectedCard.id}/price-history`)
+      .then((res) => setPriceHistory(res.data))
+      .catch(() => setPriceHistory([]))
+      .finally(() => setPriceHistoryLoading(false));
+  }, [selectedCard?.id]);
 
   const fetchSets = async () => {
     try {
@@ -670,6 +708,115 @@ export default function Cards() {
                       <p className="text-slate-400">Unlimited:</p>
                       <p className="text-green-400">✓ Legal</p>
                     </div>
+                  </div>
+
+                  <div className="bg-slate-700 rounded-lg p-4">
+                    <h3 className="text-lg font-bold text-emerald-400 mb-3">
+                      Market Price
+                    </h3>
+                    {selectedCard.prices ? (
+                      <>
+                        <p className="text-3xl font-bold text-white mb-1">
+                          {selectedCard.prices.marketPrice != null
+                            ? `$${selectedCard.prices.marketPrice.toFixed(2)}`
+                            : 'Price not available'}
+                        </p>
+                        {selectedCard.prices.marketPrice != null && (
+                          <div className="grid grid-cols-3 gap-2 text-xs text-slate-400 mb-3">
+                            <div>
+                              <p>Low</p>
+                              <p className="text-slate-200">
+                                {selectedCard.prices.lowPrice != null
+                                  ? `$${selectedCard.prices.lowPrice.toFixed(2)}`
+                                  : '—'}
+                              </p>
+                            </div>
+                            <div>
+                              <p>Mid</p>
+                              <p className="text-slate-200">
+                                {selectedCard.prices.midPrice != null
+                                  ? `$${selectedCard.prices.midPrice.toFixed(2)}`
+                                  : '—'}
+                              </p>
+                            </div>
+                            <div>
+                              <p>High</p>
+                              <p className="text-slate-200">
+                                {selectedCard.prices.highPrice != null
+                                  ? `$${selectedCard.prices.highPrice.toFixed(2)}`
+                                  : '—'}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        <p className="text-xs text-slate-500 mb-3">
+                          NM market price · Updated{' '}
+                          {new Date(selectedCard.prices.updatedAt).toLocaleDateString()}
+                        </p>
+                        <div className="flex gap-2">
+                          {selectedCard.prices.tcgplayerUrl && (
+                            <a
+                              href={selectedCard.prices.tcgplayerUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 text-center bg-blue-600 hover:bg-blue-500 text-white text-sm py-2 rounded-lg transition"
+                            >
+                              View on TCGplayer
+                            </a>
+                          )}
+                          <a
+                            href={`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(selectedCard.name + ' ' + selectedCard.setName)}&LH_Sold=1&LH_Complete=1`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 text-center bg-yellow-600 hover:bg-yellow-500 text-white text-sm py-2 rounded-lg transition"
+                          >
+                            View on eBay
+                          </a>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-slate-400 text-sm">Price not available</p>
+                    )}
+                  </div>
+
+                  <div className="bg-slate-700 rounded-lg p-4">
+                    <h3 className="text-lg font-bold text-emerald-400 mb-3">
+                      Price History
+                    </h3>
+                    {priceHistoryLoading ? (
+                      <p className="text-slate-400 text-sm">Loading...</p>
+                    ) : priceHistory.filter((p) => p.price != null).length >= 2 ? (
+                      <ResponsiveContainer width="100%" height={160}>
+                        <LineChart data={priceHistory}>
+                          <XAxis
+                            dataKey="date"
+                            tick={{ fontSize: 10, fill: '#94a3b8' }}
+                            tickFormatter={(d) => d.slice(5)}
+                          />
+                          <YAxis
+                            tick={{ fontSize: 10, fill: '#94a3b8' }}
+                            tickFormatter={(v) => `$${v}`}
+                            width={45}
+                          />
+                          <Tooltip
+                            formatter={(v: number) => [`$${v.toFixed(2)}`, 'Market']}
+                            labelFormatter={(l) => `Date: ${l}`}
+                            contentStyle={{ background: '#1e293b', border: 'none', fontSize: 12 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="price"
+                            stroke="#34d399"
+                            dot={false}
+                            strokeWidth={2}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <p className="text-slate-400 text-sm">
+                        Price history will appear after prices are tracked for a few days
+                      </p>
+                    )}
                   </div>
 
                   {selectedCard.abilities && selectedCard.abilities.length > 0 && (

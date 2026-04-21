@@ -458,7 +458,23 @@ export class CardsService {
   async getCardById(id: string) {
     return this.prisma.card.findUnique({
       where: { id },
+      include: { prices: true },
     });
+  }
+
+  async getCardPriceHistory(cardId: string) {
+    const since = new Date();
+    since.setDate(since.getDate() - 90);
+
+    const snapshots = await this.prisma.priceSnapshot.findMany({
+      where: { cardId, capturedAt: { gte: since } },
+      orderBy: { capturedAt: 'asc' },
+    });
+
+    return snapshots.map((s) => ({
+      date: s.capturedAt.toISOString().split('T')[0],
+      price: s.marketPrice,
+    }));
   }
 
   async searchCards(query: string) {

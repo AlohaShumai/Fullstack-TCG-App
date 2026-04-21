@@ -52,6 +52,12 @@ export class CardsController {
     return this.cardsService.fetchAvailableSets();
   }
 
+  @Get(':id/price-history')
+  @UseGuards(JwtAuthGuard)
+  async getCardPriceHistory(@Param('id') id: string) {
+    return this.cardsService.getCardPriceHistory(id);
+  }
+
   // Dynamic :id route MUST be last
   @Get(':id')
   async getCard(@Param('id') id: string) {
