@@ -202,10 +202,18 @@ export class PricesService {
   private buildNameMap(
     cards: PokemonTcgCard[],
   ): Map<string, PokemonTcgCard> {
+    // Only include names that are unique within the set — cards sharing a name
+    // (e.g. basic + illustration rare) cannot be reliably matched by name alone.
+    const counts = new Map<string, number>();
+    for (const card of cards) {
+      const key = card.name.toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
     const map = new Map<string, PokemonTcgCard>();
     for (const card of cards) {
-      if (!map.has(card.name.toLowerCase())) {
-        map.set(card.name.toLowerCase(), card);
+      const key = card.name.toLowerCase();
+      if (counts.get(key) === 1) {
+        map.set(key, card);
       }
     }
     return map;
@@ -243,7 +251,14 @@ export class PricesService {
       return { marketPrice: null, lowPrice: null, midPrice: null, highPrice: null };
     }
 
-    const preferredKeys = ['normal', 'holofoil', 'reverseHolofoil'];
+    const preferredKeys = [
+      'normal',
+      'holofoil',
+      'reverseHolofoil',
+      'illustrationRare',
+      'specialIllustrationRare',
+      'hyperRare',
+    ];
     let variant: PriceVariant | undefined;
 
     for (const key of preferredKeys) {
