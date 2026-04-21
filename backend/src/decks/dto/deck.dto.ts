@@ -47,3 +47,17 @@ export class UpdateDeckCardDto {
   @Max(60)
   quantity: number;
 }
+
+export class ImportDeckDto {
+  @IsString()
+  @MinLength(1)
+  name: string;
+
+  @IsString()
+  @IsIn(['standard', 'unlimited'])
+  format: string;
+
+  @IsString()
+  @MinLength(1)
+  deckList: string;
+}

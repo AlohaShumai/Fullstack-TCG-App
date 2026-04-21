@@ -64,6 +64,44 @@ describe('DecksService', () => {
     jest.clearAllMocks();
   });
 
+  describe('parseDeckList', () => {
+    it('should parse a well-formed deck list into correct entries', () => {
+      const list = `Pokémon: 2
+4 Charizard ex OBF 125
+3 Pidgey OBF 163
+
+Trainer: 1
+4 Rare Candy SVI 191
+
+Energy: 1
+9 Basic Fire Energy`;
+
+      const result = service.parseDeckList(list);
+
+      expect(result).toEqual([
+        { quantity: 4, cardName: 'Charizard ex', setCode: 'OBF', setNumber: '125' },
+        { quantity: 3, cardName: 'Pidgey', setCode: 'OBF', setNumber: '163' },
+        { quantity: 4, cardName: 'Rare Candy', setCode: 'SVI', setNumber: '191' },
+        { quantity: 9, cardName: 'Basic Fire Energy' },
+      ]);
+    });
+
+    it('should skip section headers, blank lines, and unparseable lines', () => {
+      const list = `Pokémon: 14
+not a valid line at all
+4 Charizard ex OBF 125
+
+!!!garbage!!!
+3 Basic Psychic Energy`;
+
+      const result = service.parseDeckList(list);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({ quantity: 4, cardName: 'Charizard ex', setCode: 'OBF' });
+      expect(result[1]).toMatchObject({ quantity: 3, cardName: 'Basic Psychic Energy' });
+    });
+  });
+
   describe('validateDeck', () => {
     // ------------------------------------------------------------------ //
     // Rule 1: exactly 60 cards

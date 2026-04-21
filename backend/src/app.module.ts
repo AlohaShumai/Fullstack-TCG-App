@@ -11,6 +11,7 @@ import { DecksModule } from './decks/decks.module';
 import { RagModule } from './rag/rag.module';
 import { AiModule } from './ai/ai.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { PricesModule } from './prices/prices.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     RagModule,
     AiModule,
     DashboardModule,
+    PricesModule,
   ],
 })
 export class AppModule {}

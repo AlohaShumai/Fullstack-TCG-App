@@ -8,6 +8,7 @@ interface JwtPayload {
   sub: string;
   email: string;
   role: string;
+  username: string;
 }
 
 @Injectable()
@@ -38,6 +39,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
       id: payload.sub,
       email: payload.email,
       role: payload.role,
+      username: payload.username,
       refreshToken,
     };
   }

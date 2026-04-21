@@ -8,6 +8,7 @@ interface TokenPayload {
   sub: string;
   email: string;
   role: string;
+  username: string;
 }
 
 export interface Tokens {
@@ -23,17 +24,27 @@ export class AuthService {
     private configService: ConfigService,
   ) {}
 
-  async register(email: string, password: string): Promise<Tokens> {
+  async register(
+    email: string,
+    password: string,
+    username: string,
+  ): Promise<Tokens> {
     const existingUser = await this.usersService.findByEmail(email);
     if (existingUser) {
       throw new UnauthorizedException('Email already registered');
     }
 
-    const user = await this.usersService.create(email, password);
+    const existingUsername = await this.usersService.findByUsername(username);
+    if (existingUsername) {
+      throw new UnauthorizedException('Username already taken');
+    }
+
+    const user = await this.usersService.create(email, password, username);
     const tokens = await this.generateTokens({
       sub: user.id,
       email: user.email,
       role: user.role,
+      username: user.username,
     });
 
     await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
@@ -55,6 +66,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      username: user.username,
     });
 
     await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
@@ -76,6 +88,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      username: user.username,
     });
 
     await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);

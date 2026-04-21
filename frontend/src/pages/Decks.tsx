@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 interface Card {
@@ -23,6 +23,7 @@ interface Deck {
 }
 
 export default function Decks() {
+  const navigate = useNavigate();
   const [decks, setDecks] = useState<Deck[]>([]);
   const [loading, setLoading] = useState(true);
   const [newDeckName, setNewDeckName] = useState('');
@@ -30,6 +31,13 @@ export default function Decks() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [notification, setNotification] = useState('');
   const [notifError, setNotifError] = useState(false);
+
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importName, setImportName] = useState('');
+  const [importFormat, setImportFormat] = useState('unlimited');
+  const [importList, setImportList] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
 
   const showNotification = (msg: string, isError = false) => {
     setNotification(msg);
@@ -75,6 +83,36 @@ export default function Decks() {
     }
   };
 
+  const importDeck = async () => {
+    if (!importName.trim() || !importList.trim()) return;
+    setImporting(true);
+    try {
+      const response = await api.post('/decks/import', {
+        name: importName,
+        format: importFormat,
+        deckList: importList,
+      });
+      const { deck, notFound, warnings } = response.data;
+      const allWarnings = [
+        ...warnings,
+        ...notFound.map((c: string) => `Not found: ${c}`),
+      ];
+      setImportWarnings(allWarnings);
+      setShowImportModal(false);
+      setImportName('');
+      setImportFormat('unlimited');
+      setImportList('');
+      if (allWarnings.length === 0) {
+        showNotification('Deck imported successfully!');
+      }
+      navigate(`/decks/${deck.id}`);
+    } catch {
+      showNotification('Failed to import deck', true);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const getTotalCards = (deck: Deck) => {
     return deck.cards.reduce((sum, card) => sum + card.quantity, 0);
   };
@@ -111,12 +149,20 @@ export default function Decks() {
       <div className="container mx-auto p-4 sm:p-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <h2 className="text-2xl sm:text-3xl font-bold text-slate-100">My Decks</h2>
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition"
-          >
-            + New Deck
-          </button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex-1 sm:flex-none bg-slate-700 hover:bg-slate-600 text-slate-100 px-4 py-2 rounded-lg transition"
+            >
+              Import Deck
+            </button>
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition"
+            >
+              + New Deck
+            </button>
+          </div>
         </div>
 
         {showCreateForm && (
@@ -154,6 +200,25 @@ export default function Decks() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {importWarnings.length > 0 && (
+          <div className="bg-yellow-900 border border-yellow-700 rounded-lg p-4 mb-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-yellow-300 font-semibold mb-2">Import completed with warnings:</p>
+                <ul className="text-yellow-200 text-sm space-y-1">
+                  {importWarnings.map((w, i) => <li key={i}>• {w}</li>)}
+                </ul>
+              </div>
+              <button
+                onClick={() => setImportWarnings([])}
+                className="text-yellow-400 hover:text-yellow-200 ml-4"
+              >
+                ✕
+              </button>
             </div>
           </div>
         )}
@@ -240,6 +305,61 @@ export default function Decks() {
           </div>
         )}
       </div>
+
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl shadow-2xl">
+            <div className="flex justify-between items-center p-6 border-b border-slate-700">
+              <h3 className="text-xl font-bold text-slate-100">Import Deck</h3>
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="text-slate-400 hover:text-slate-200 text-2xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
+              <input
+                type="text"
+                placeholder="Deck name..."
+                value={importName}
+                onChange={(e) => setImportName(e.target.value)}
+                className="p-3 rounded-lg bg-slate-700 text-slate-100 border border-slate-600 focus:border-indigo-500 focus:outline-none"
+              />
+              <select
+                value={importFormat}
+                onChange={(e) => setImportFormat(e.target.value)}
+                className="p-3 rounded-lg bg-slate-700 text-slate-100 border border-slate-600 focus:border-indigo-500 focus:outline-none"
+              >
+                <option value="unlimited">Unlimited (Any cards)</option>
+                <option value="standard">Standard (Tournament legal)</option>
+              </select>
+              <textarea
+                placeholder={`Paste deck list here...\n\nPokémon: 14\n4 Charizard ex OBF 125\n...\n\nEnergy: 12\n9 Basic Fire Energy`}
+                value={importList}
+                onChange={(e) => setImportList(e.target.value)}
+                rows={12}
+                className="p-3 rounded-lg bg-slate-700 text-slate-100 border border-slate-600 focus:border-indigo-500 focus:outline-none font-mono text-sm resize-none"
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={importDeck}
+                  disabled={importing || !importName.trim() || !importList.trim()}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white py-2 rounded-lg transition font-semibold"
+                >
+                  {importing ? 'Importing...' : 'Import'}
+                </button>
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-100 py-2 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

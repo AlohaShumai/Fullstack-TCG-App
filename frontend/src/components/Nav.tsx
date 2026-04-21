@@ -88,7 +88,12 @@ export default function Nav() {
 
         {/* Right side */}
         <div className="flex items-center gap-3 ml-4 flex-shrink-0">
-          <span className="text-slate-500 text-xs hidden sm:block">{user?.email}</span>
+          <Link
+            to="/profile"
+            className="text-slate-400 hover:text-slate-100 text-xs hidden sm:block transition"
+          >
+            {user?.username}
+          </Link>
           <button
             onClick={logout}
             className="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded-lg transition"

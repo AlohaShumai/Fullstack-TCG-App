@@ -16,6 +16,7 @@ import {
   UpdateDeckDto,
   AddCardToDeckDto,
   UpdateDeckCardDto,
+  ImportDeckDto,
 } from './dto/deck.dto';
 import type { AuthRequest } from '../common/types';
 
@@ -23,6 +24,16 @@ import type { AuthRequest } from '../common/types';
 @UseGuards(JwtAuthGuard)
 export class DecksController {
   constructor(private decksService: DecksService) {}
+
+  @Post('import')
+  async importDeck(@Request() req: AuthRequest, @Body() dto: ImportDeckDto) {
+    return this.decksService.importDeck(
+      req.user.id,
+      dto.name,
+      dto.format,
+      dto.deckList,
+    );
+  }
 
   @Post()
   async createDeck(@Request() req: AuthRequest, @Body() dto: CreateDeckDto) {

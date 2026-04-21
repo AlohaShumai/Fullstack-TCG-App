@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 
 // bcrypt is a CommonJS module whose properties aren't configurable,
@@ -15,6 +16,7 @@ const mockUsersService = {
   findById: jest.fn(),
   create: jest.fn(),
   updateRefreshToken: jest.fn(),
+  findByUsername: jest.fn(),
 };
 
 const mockJwtService = {
@@ -51,13 +53,36 @@ describe('AuthService', () => {
       mockUsersService.create.mockResolvedValue({
         id: 'user-1',
         email: 'user@test.com',
-        role: 'user',
+        username: 'user_1',
+        role: 'USER',
       });
 
-      const result = await service.register('user@test.com', 'password123');
+      const result = await service.register(
+        'user@test.com',
+        'password123',
+        'user_1',
+      );
 
       expect(result.accessToken).toBe('fake-token');
       expect(result.refreshToken).toBe('fake-token');
+    });
+
+    it('should call create with the provided username', async () => {
+      mockUsersService.findByEmail.mockResolvedValue(null);
+      mockUsersService.create.mockResolvedValue({
+        id: 'user-1',
+        email: 'user@test.com',
+        username: 'cool_trainer',
+        role: 'USER',
+      });
+
+      await service.register('user@test.com', 'password123', 'cool_trainer');
+
+      expect(mockUsersService.create).toHaveBeenCalledWith(
+        'user@test.com',
+        'password123',
+        'cool_trainer',
+      );
     });
 
     it('should throw UnauthorizedException if email is already registered', async () => {
@@ -67,7 +92,19 @@ describe('AuthService', () => {
       });
 
       await expect(
-        service.register('user@test.com', 'password123'),
+        service.register('user@test.com', 'password123', 'user_1'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException if username is already taken', async () => {
+      mockUsersService.findByEmail.mockResolvedValue(null);
+      mockUsersService.findByUsername.mockResolvedValue({
+        id: 'user-2',
+        username: 'cool_trainer',
+      });
+
+      await expect(
+        service.register('new@test.com', 'password123', 'cool_trainer'),
       ).rejects.toThrow(UnauthorizedException);
     });
   });
@@ -80,8 +117,9 @@ describe('AuthService', () => {
       mockUsersService.findByEmail.mockResolvedValue({
         id: 'user-1',
         email: 'user@test.com',
+        username: 'user_1',
         password: 'hashed-password',
-        role: 'user',
+        role: 'USER',
       });
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
@@ -95,8 +133,9 @@ describe('AuthService', () => {
       mockUsersService.findByEmail.mockResolvedValue({
         id: 'user-1',
         email: 'user@test.com',
+        username: 'user_1',
         password: 'hashed-password',
-        role: 'user',
+        role: 'USER',
       });
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
@@ -122,7 +161,8 @@ describe('AuthService', () => {
       mockUsersService.findById.mockResolvedValue({
         id: 'user-1',
         email: 'user@test.com',
-        role: 'user',
+        username: 'user_1',
+        role: 'USER',
         refreshToken: 'hashed-refresh-token',
       });
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
@@ -137,7 +177,8 @@ describe('AuthService', () => {
       mockUsersService.findById.mockResolvedValue({
         id: 'user-1',
         email: 'user@test.com',
-        role: 'user',
+        username: 'user_1',
+        role: 'USER',
         refreshToken: 'hashed-refresh-token',
       });
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
@@ -151,7 +192,8 @@ describe('AuthService', () => {
       mockUsersService.findById.mockResolvedValue({
         id: 'user-1',
         email: 'user@test.com',
-        role: 'user',
+        username: 'user_1',
+        role: 'USER',
         refreshToken: null,
       });
 
@@ -159,5 +201,57 @@ describe('AuthService', () => {
         service.refresh('user-1', 'any-token'),
       ).rejects.toThrow(UnauthorizedException);
     });
+  });
+});
+
+// ------------------------------------------------------------------ //
+// UsersService - updatePassword
+// ------------------------------------------------------------------ //
+describe('UsersService - updatePassword', () => {
+  const mockPrismaForUsers = {
+    user: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+  };
+
+  let usersService: UsersService;
+
+  beforeEach(() => {
+    usersService = new UsersService(
+      mockPrismaForUsers as unknown as PrismaService,
+    );
+    jest.clearAllMocks();
+    mockPrismaForUsers.user.update.mockResolvedValue({});
+    (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-new-password');
+  });
+
+  it('should update the password when current password is correct', async () => {
+    mockPrismaForUsers.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      password: 'hashed-current',
+    });
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+    await usersService.updatePassword('user-1', 'correctpass', 'newpassword123');
+
+    expect(mockPrismaForUsers.user.update).toHaveBeenCalledTimes(1);
+    expect(mockPrismaForUsers.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'user-1' } }),
+    );
+  });
+
+  it('should throw UnauthorizedException when current password is wrong', async () => {
+    mockPrismaForUsers.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      password: 'hashed-current',
+    });
+    (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+    await expect(
+      usersService.updatePassword('user-1', 'wrongpass', 'newpassword123'),
+    ).rejects.toThrow(UnauthorizedException);
+
+    expect(mockPrismaForUsers.user.update).not.toHaveBeenCalled();
   });
 });

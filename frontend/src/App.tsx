@@ -9,6 +9,7 @@ import Collection from './pages/Collection';
 import Decks from './pages/Decks';
 import DeckDetail from './pages/DeckDetail';
 import Advisor from './pages/Advisor';
+import Profile from './pages/Profile';
 import FloatingChat from './components/FloatingChat';
 import Nav from './components/Nav';
 
@@ -49,6 +50,7 @@ function AppRoutes() {
         <Route path="/decks" element={<Decks />} />
         <Route path="/decks/:deckId" element={<DeckDetail />} />
         <Route path="/advisor" element={<Advisor />} />
+        <Route path="/profile" element={<Profile />} />
       </Route>
     </Routes>
   );

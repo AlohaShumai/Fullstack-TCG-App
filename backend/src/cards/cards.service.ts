@@ -70,13 +70,17 @@ export interface TCGdexSetInfo {
 @Injectable()
 export class CardsService {
   private readonly logger = new Logger(CardsService.name);
-  private readonly tcgdexUrl = 'https://api.tcgdex.net/v2/en';
+  private readonly tcgdexUrl: string;
 
   constructor(
     private prisma: PrismaService,
     private httpService: HttpService,
     private configService: ConfigService,
-  ) {}
+  ) {
+    this.tcgdexUrl =
+      this.configService.get<string>('TCGDEX_API_URL') ??
+      'https://api.tcgdex.net/v2/en';
+  }
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleDailySync() {

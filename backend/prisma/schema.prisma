@@ -17,6 +17,7 @@ enum Role {
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
+  username     String   @unique
   password     String
   role         Role     @default(USER)
   refreshToken String?
@@ -51,6 +52,8 @@ model Card {
 
   collectionCards CollectionCard[]
   deckCards       DeckCard[]
+  prices          CardPrice?
+  priceHistory    PriceSnapshot[]
 }
 
 model Collection {
@@ -100,4 +103,28 @@ model DeckCard {
   card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
   @@unique([deckId, cardId])
+}
+
+model CardPrice {
+  id           String   @id @default(uuid())
+  cardId       String   @unique
+  marketPrice  Float?
+  lowPrice     Float?
+  midPrice     Float?
+  highPrice    Float?
+  tcgplayerUrl String?
+  updatedAt    DateTime @updatedAt
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+}
+
+model PriceSnapshot {
+  id          String   @id @default(uuid())
+  cardId      String
+  marketPrice Float?
+  capturedAt  DateTime @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId, capturedAt])
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
 interface FeaturedCard {
@@ -46,6 +47,7 @@ const sectionHeaderStyle: React.CSSProperties = {
 };
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [events, setEvents] = useState<TournamentEvent[]>([]);
@@ -154,7 +156,9 @@ export default function Dashboard() {
           transition: 'opacity 0.4s ease, transform 0.4s ease',
         }}
       >
-        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-6">Dashboard</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-6">
+          Welcome, {user?.username ?? 'Trainer'}
+        </h1>
 
         {/* Stats Bar */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

@@ -2,17 +2,39 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+function validateUsername(value: string): string {
+  if (value.length < 3) return 'Must be at least 3 characters';
+  if (value.length > 20) return 'Must be at most 20 characters';
+  if (!/^[a-zA-Z0-9_]+$/.test(value))
+    return 'Only letters, numbers, and underscores allowed';
+  return '';
+}
+
 export default function Register() {
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [usernameError, setUsernameError] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const { register } = useAuth();
   const navigate = useNavigate();
 
+  const handleUsernameChange = (value: string) => {
+    setUsername(value);
+    if (value) setUsernameError(validateUsername(value));
+    else setUsernameError('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    const uErr = validateUsername(username);
+    if (uErr) {
+      setUsernameError(uErr);
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -25,17 +47,26 @@ export default function Register() {
     }
 
     try {
-      await register(email, password);
+      await register(email, password, username);
       navigate('/');
-    } catch {
-      setError('Registration failed. Email may already be in use.');
+    } catch (err: any) {
+      const msg = err.response?.data?.message;
+      if (Array.isArray(msg)) {
+        setError(msg[0]);
+      } else if (msg) {
+        setError(msg);
+      } else {
+        setError('Registration failed. Email or username may already be in use.');
+      }
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center">
       <div className="bg-gray-800 p-8 rounded-lg shadow-lg w-full max-w-md">
-        <h1 className="text-3xl font-bold text-white mb-6 text-center">Register</h1>
+        <h1 className="text-3xl font-bold text-white mb-6 text-center">
+          Register
+        </h1>
 
         {error && (
           <div className="bg-red-500 text-white p-3 rounded mb-4">{error}</div>
@@ -51,6 +82,27 @@ export default function Register() {
               className="w-full p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-blue-500 focus:outline-none"
               required
             />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-gray-300 mb-2">Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => handleUsernameChange(e.target.value)}
+              className={`w-full p-3 rounded bg-gray-700 text-white border focus:outline-none ${
+                usernameError
+                  ? 'border-red-500 focus:border-red-500'
+                  : 'border-gray-600 focus:border-blue-500'
+              }`}
+              required
+            />
+            {usernameError && (
+              <p className="text-red-400 text-sm mt-1">{usernameError}</p>
+            )}
+            {!usernameError && username && (
+              <p className="text-green-400 text-sm mt-1">Looks good!</p>
+            )}
           </div>
 
           <div className="mb-4">
