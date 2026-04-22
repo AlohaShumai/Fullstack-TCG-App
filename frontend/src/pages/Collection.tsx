@@ -4,6 +4,7 @@ import api from '../services/api';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
+import type { ValueType } from 'recharts/types/component/DefaultTooltipContent';
 
 interface Card {
   id: string;
@@ -85,18 +86,24 @@ export default function CollectionPage() {
   }, [fetchCollections]);
 
   const selectCollection = async (collectionId: string) => {
+    setPortfolio(null);
     try {
-      // Fetch collection detail and stats in parallel
-      const [collectionRes, statsRes, portfolioRes] = await Promise.all([
+      const [collectionRes, statsRes] = await Promise.all([
         api.get(`/collections/${collectionId}`),
         api.get(`/collections/${collectionId}/stats`),
-        api.get(`/collections/${collectionId}/portfolio`),
       ]);
       setSelectedCollection(collectionRes.data);
       setStats(statsRes.data);
-      setPortfolio(portfolioRes.data);
     } catch {
       showNotification('Failed to load collection', true);
+      return;
+    }
+    // Fetch portfolio separately so its failure doesn't break the page
+    try {
+      const portfolioRes = await api.get(`/collections/${collectionId}/portfolio`);
+      setPortfolio(portfolioRes.data);
+    } catch {
+      // Portfolio is non-critical; silently leave it null
     }
   };
 
@@ -352,10 +359,15 @@ export default function CollectionPage() {
               <div className="bg-slate-800 rounded-lg p-4 sm:p-6 mb-8 border border-slate-700">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                   <h3 className="text-xl font-bold text-slate-100">Portfolio Value</h3>
-                  <span className="text-2xl font-bold text-emerald-400">
+                  <span className={`text-2xl font-bold ${portfolio.currentValue > 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
                     ${portfolio.currentValue.toFixed(2)}
                   </span>
                 </div>
+                {portfolio.currentValue === 0 && (
+                  <p className="text-slate-500 text-sm mb-3">
+                    No price data yet — run a price sync or add cards with known prices to see your collection's value.
+                  </p>
+                )}
                 {portfolio.history.filter((p) => p.value > 0).length >= 2 ? (
                   <ResponsiveContainer width="100%" height={140}>
                     <LineChart data={portfolio.history}>
@@ -371,8 +383,11 @@ export default function CollectionPage() {
                         domain={['auto', 'auto']}
                       />
                       <Tooltip
-                        formatter={(v: number) => [`$${v.toFixed(2)}`, 'Value']}
-                        labelFormatter={(l: string) => `Date: ${l}`}
+                        formatter={(value: ValueType | undefined) => {
+                          const num = typeof value === 'number' ? value : 0;
+                          return [`$${num.toFixed(2)}`, 'Value'];
+                        }}
+                        labelFormatter={(label) => `Date: ${label}`}
                         contentStyle={{ background: '#1e293b', border: 'none', fontSize: 12 }}
                       />
                       <Line

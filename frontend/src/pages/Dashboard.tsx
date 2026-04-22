@@ -5,6 +5,7 @@ import api from '../services/api';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
+import type { ValueType } from 'recharts/types/component/DefaultTooltipContent';
 
 interface FeaturedCard {
   id: string;
@@ -220,9 +221,12 @@ export default function Dashboard() {
               ) : (
                 <div className="flex flex-col sm:flex-row gap-6 items-start">
                   <div className="flex-shrink-0">
-                    <p className="text-3xl font-bold text-white">
+                    <p className={`text-3xl font-bold ${(portfolio?.currentValue ?? 0) > 0 ? 'text-white' : 'text-slate-400'}`}>
                       ${(portfolio?.currentValue ?? 0).toFixed(2)}
                     </p>
+                    {(portfolio?.currentValue ?? 0) === 0 && (
+                      <p className="text-slate-500 text-xs mt-1">No price data yet</p>
+                    )}
                     {change !== null ? (
                       <p className={`text-sm font-medium mt-1 ${changePos ? 'text-emerald-400' : 'text-red-400'}`}>
                         {changePos ? '▲' : '▼'} {Math.abs(change).toFixed(1)}% (30d)
@@ -238,8 +242,11 @@ export default function Dashboard() {
                           <XAxis dataKey="date" hide />
                           <YAxis hide domain={['auto', 'auto']} />
                           <Tooltip
-                            formatter={(v: number) => [`$${v.toFixed(2)}`, 'Value']}
-                            labelFormatter={(l: string) => `Date: ${l}`}
+                            formatter={(value: ValueType | undefined) => {
+                              const num = typeof value === 'number' ? value : 0;
+                              return [`$${num.toFixed(2)}`, 'Value'];
+                            }}
+                            labelFormatter={(label) => `Date: ${label}`}
                             contentStyle={{ background: '#1e293b', border: 'none', fontSize: 12 }}
                           />
                           <Line
