@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+} from 'recharts';
 
 interface Card {
   id: string;
@@ -39,10 +42,16 @@ interface Stats {
   bySupertype: Record<string, number>;
 }
 
+interface PortfolioData {
+  currentValue: number;
+  history: { date: string; value: number }[];
+}
+
 export default function CollectionPage() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selectedCollection, setSelectedCollection] = useState<Collection | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -78,12 +87,14 @@ export default function CollectionPage() {
   const selectCollection = async (collectionId: string) => {
     try {
       // Fetch collection detail and stats in parallel
-      const [collectionRes, statsRes] = await Promise.all([
+      const [collectionRes, statsRes, portfolioRes] = await Promise.all([
         api.get(`/collections/${collectionId}`),
         api.get(`/collections/${collectionId}/stats`),
+        api.get(`/collections/${collectionId}/portfolio`),
       ]);
       setSelectedCollection(collectionRes.data);
       setStats(statsRes.data);
+      setPortfolio(portfolioRes.data);
     } catch {
       showNotification('Failed to load collection', true);
     }
@@ -333,6 +344,50 @@ export default function CollectionPage() {
                       ))}
                     </div>
                   </div>
+                )}
+              </div>
+            )}
+
+            {portfolio && (
+              <div className="bg-slate-800 rounded-lg p-4 sm:p-6 mb-8 border border-slate-700">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                  <h3 className="text-xl font-bold text-slate-100">Portfolio Value</h3>
+                  <span className="text-2xl font-bold text-emerald-400">
+                    ${portfolio.currentValue.toFixed(2)}
+                  </span>
+                </div>
+                {portfolio.history.filter((p) => p.value > 0).length >= 2 ? (
+                  <ResponsiveContainer width="100%" height={140}>
+                    <LineChart data={portfolio.history}>
+                      <XAxis
+                        dataKey="date"
+                        tick={{ fontSize: 10, fill: '#94a3b8' }}
+                        tickFormatter={(d: string) => d.slice(5)}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: '#94a3b8' }}
+                        tickFormatter={(v: number) => `$${v}`}
+                        width={50}
+                        domain={['auto', 'auto']}
+                      />
+                      <Tooltip
+                        formatter={(v: number) => [`$${v.toFixed(2)}`, 'Value']}
+                        labelFormatter={(l: string) => `Date: ${l}`}
+                        contentStyle={{ background: '#1e293b', border: 'none', fontSize: 12 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke="#34d399"
+                        dot={false}
+                        strokeWidth={2}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-slate-500 text-sm">
+                    Price history will appear after daily price syncs have run for a few days.
+                  </p>
                 )}
               </div>
             )}

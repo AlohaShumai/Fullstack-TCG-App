@@ -11,6 +11,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
+import { CollectionsService } from '../collections/collections.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateUsernameDto, UpdatePasswordDto } from './dto/users.dto';
 import type { AuthRequest } from '../common/types';
@@ -18,7 +19,15 @@ import type { AuthRequest } from '../common/types';
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private usersService: UsersService) {}
+  constructor(
+    private usersService: UsersService,
+    private collectionsService: CollectionsService,
+  ) {}
+
+  @Get('me/portfolio')
+  async getMyPortfolio(@Request() req: AuthRequest) {
+    return this.collectionsService.getUserPortfolio(req.user.id);
+  }
 
   @Get('me')
   async getMe(@Request() req: AuthRequest) {

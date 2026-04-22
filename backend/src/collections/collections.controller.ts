@@ -34,6 +34,15 @@ export class CollectionsController {
     return this.collectionsService.getCollection(req.user.id, collectionId);
   }
 
+  // Get portfolio value and 30-day history for a specific collection
+  @Get(':collectionId/portfolio')
+  async getCollectionPortfolio(
+    @Request() req: AuthRequest,
+    @Param('collectionId') collectionId: string,
+  ) {
+    return this.collectionsService.getCollectionPortfolio(collectionId, req.user.id);
+  }
+
   // Get stats for a specific collection
   @Get(':collectionId/stats')
   async getCollectionStats(

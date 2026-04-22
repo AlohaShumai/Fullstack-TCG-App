@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+} from 'recharts';
 
 interface FeaturedCard {
   id: string;
@@ -38,6 +41,11 @@ interface TournamentEvent {
   source: string;
 }
 
+interface PortfolioData {
+  currentValue: number;
+  history: { date: string; value: number }[];
+}
+
 const cardShadow = '0 4px 6px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.2)';
 
 const sectionHeaderStyle: React.CSSProperties = {
@@ -56,6 +64,8 @@ export default function Dashboard() {
   const [newsLoading, setNewsLoading] = useState(true);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(true);
+  const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [newsIndex, setNewsIndex] = useState(0);
   const [newsFade, setNewsFade] = useState(true);
   const [visible, setVisible] = useState(false);
@@ -102,6 +112,11 @@ export default function Dashboard() {
   }, [news.length]);
 
   useEffect(() => {
+
+    api.get('/users/me/portfolio')
+      .then((res) => setPortfolio(res.data))
+      .catch(() => {})
+      .finally(() => setPortfolioLoading(false));
 
     api.get('/dashboard/stats')
       .then((res) => setStats(res.data))
@@ -182,6 +197,71 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+
+        {/* Portfolio Value */}
+        {(() => {
+          const history = portfolio?.history ?? [];
+          const validHistory = history.filter((p) => p.value > 0);
+          const first = history[0]?.value ?? 0;
+          const last = history[history.length - 1]?.value ?? 0;
+          const change = first > 0 ? ((last - first) / first) * 100 : null;
+          const changePos = change !== null && change >= 0;
+
+          return (
+            <div
+              className="bg-slate-800 rounded-lg p-4 mb-8"
+              style={{ boxShadow: cardShadow }}
+            >
+              <h2 className="text-lg font-bold text-white mb-4" style={sectionHeaderStyle}>
+                Portfolio Value
+              </h2>
+              {portfolioLoading ? (
+                <p className="text-slate-500 text-sm animate-pulse">Loading portfolio...</p>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-6 items-start">
+                  <div className="flex-shrink-0">
+                    <p className="text-3xl font-bold text-white">
+                      ${(portfolio?.currentValue ?? 0).toFixed(2)}
+                    </p>
+                    {change !== null ? (
+                      <p className={`text-sm font-medium mt-1 ${changePos ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {changePos ? '▲' : '▼'} {Math.abs(change).toFixed(1)}% (30d)
+                      </p>
+                    ) : (
+                      <p className="text-slate-500 text-sm mt-1">— 30d change</p>
+                    )}
+                  </div>
+                  <div className="flex-1 w-full" style={{ minWidth: 0 }}>
+                    {validHistory.length >= 2 ? (
+                      <ResponsiveContainer width="100%" height={100}>
+                        <LineChart data={history}>
+                          <XAxis dataKey="date" hide />
+                          <YAxis hide domain={['auto', 'auto']} />
+                          <Tooltip
+                            formatter={(v: number) => [`$${v.toFixed(2)}`, 'Value']}
+                            labelFormatter={(l: string) => `Date: ${l}`}
+                            contentStyle={{ background: '#1e293b', border: 'none', fontSize: 12 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="value"
+                            stroke={changePos ? '#34d399' : '#f87171'}
+                            dot={false}
+                            strokeWidth={2}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <p className="text-slate-500 text-sm pt-2">
+                        Price history will appear after daily price syncs have run for a few days.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Three Column Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">

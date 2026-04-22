@@ -266,4 +266,121 @@ export class CollectionsService {
       bySupertype: supertypeCount,
     };
   }
+
+  async getCollectionPortfolio(
+    collectionId: string,
+    userId: string,
+  ): Promise<{ currentValue: number; history: { date: string; value: number }[] }> {
+    const collection = await this.prisma.collection.findFirst({
+      where: { id: collectionId, userId },
+      include: {
+        cards: {
+          include: { card: { include: { prices: true } } },
+        },
+      },
+    });
+
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const currentValue = collection.cards.reduce(
+      (sum, cc) => sum + cc.quantity * (cc.card.prices?.marketPrice ?? 0),
+      0,
+    );
+
+    const cards = collection.cards.map((cc) => ({
+      cardId: cc.cardId,
+      quantity: cc.quantity,
+    }));
+
+    const history = await this.buildPortfolioHistory(cards);
+    return { currentValue: Math.round(currentValue * 100) / 100, history };
+  }
+
+  async getUserPortfolio(
+    userId: string,
+  ): Promise<{ currentValue: number; history: { date: string; value: number }[] }> {
+    const collectionCards = await this.prisma.collectionCard.findMany({
+      where: { collection: { userId } },
+      include: { card: { include: { prices: true } } },
+    });
+
+    // Aggregate quantities per unique card across all collections
+    const cardMap = new Map<string, { quantity: number; marketPrice: number | null }>();
+    for (const cc of collectionCards) {
+      const existing = cardMap.get(cc.cardId);
+      if (existing) {
+        existing.quantity += cc.quantity;
+      } else {
+        cardMap.set(cc.cardId, {
+          quantity: cc.quantity,
+          marketPrice: cc.card.prices?.marketPrice ?? null,
+        });
+      }
+    }
+
+    const currentValue = Array.from(cardMap.values()).reduce(
+      (sum, { quantity, marketPrice }) => sum + quantity * (marketPrice ?? 0),
+      0,
+    );
+
+    const cards = Array.from(cardMap.entries()).map(([cardId, { quantity }]) => ({
+      cardId,
+      quantity,
+    }));
+
+    const history = await this.buildPortfolioHistory(cards);
+    return { currentValue: Math.round(currentValue * 100) / 100, history };
+  }
+
+  private async buildPortfolioHistory(
+    cards: Array<{ cardId: string; quantity: number }>,
+  ): Promise<Array<{ date: string; value: number }>> {
+    if (cards.length === 0) return [];
+
+    const cardIds = cards.map((c) => c.cardId);
+    const since = new Date();
+    since.setDate(since.getDate() - 35);
+
+    const snapshots = await this.prisma.priceSnapshot.findMany({
+      where: { cardId: { in: cardIds }, capturedAt: { gte: since } },
+      orderBy: { capturedAt: 'asc' },
+    });
+
+    const snapshotMap = new Map<
+      string,
+      Array<{ capturedAt: Date; marketPrice: number | null }>
+    >();
+    for (const s of snapshots) {
+      if (!snapshotMap.has(s.cardId)) snapshotMap.set(s.cardId, []);
+      snapshotMap.get(s.cardId)!.push(s);
+    }
+
+    const history: Array<{ date: string; value: number }> = [];
+    for (let daysAgo = 29; daysAgo >= 0; daysAgo--) {
+      const day = new Date();
+      day.setDate(day.getDate() - daysAgo);
+      day.setHours(23, 59, 59, 999);
+
+      let dayValue = 0;
+      for (const { cardId, quantity } of cards) {
+        const cardSnaps = snapshotMap.get(cardId) ?? [];
+        let latestPrice: number | null = null;
+        for (const s of cardSnaps) {
+          if (s.capturedAt <= day && s.marketPrice !== null) {
+            latestPrice = s.marketPrice;
+          }
+        }
+        if (latestPrice !== null) {
+          dayValue += quantity * latestPrice;
+        }
+      }
+
+      history.push({
+        date: day.toISOString().split('T')[0],
+        value: Math.round(dayValue * 100) / 100,
+      });
+    }
+
+    return history;
+  }
 }
