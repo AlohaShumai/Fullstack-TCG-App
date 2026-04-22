@@ -164,21 +164,49 @@ export class PricesService {
     const pageSize = 250;
 
     while (true) {
-      const response = await firstValueFrom(
-        this.httpService.get<PokemonTcgResponse>(`${this.apiUrl}/cards`, {
-          params: { q: `set.id:${apiSetId}`, pageSize, page },
-          headers: this.apiKey ? { 'X-Api-Key': this.apiKey } : {},
-          timeout: 30000,
-        }),
-      );
+      const response = await this.fetchPageWithRetry(apiSetId, page, pageSize);
+      cards.push(...response.data);
 
-      cards.push(...response.data.data);
-
-      if (cards.length >= response.data.totalCount) break;
+      if (cards.length >= response.totalCount) break;
       page++;
     }
 
     return cards;
+  }
+
+  private async fetchPageWithRetry(
+    apiSetId: string,
+    page: number,
+    pageSize: number,
+    maxRetries = 2,
+  ): Promise<PokemonTcgResponse> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+      try {
+        if (attempt > 1) {
+          this.logger.warn(
+            `Retry ${attempt - 1}/${maxRetries} for set ${apiSetId} page ${page}`,
+          );
+        }
+        const response = await firstValueFrom(
+          this.httpService.get<PokemonTcgResponse>(`${this.apiUrl}/cards`, {
+            params: { q: `set.id:${apiSetId}`, pageSize, page },
+            headers: this.apiKey ? { 'X-Api-Key': this.apiKey } : {},
+            timeout: 90000,
+          }),
+        );
+        return response.data;
+      } catch (err) {
+        lastError = err;
+        this.logger.warn(
+          `Attempt ${attempt} failed for set ${apiSetId} page ${page}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        if (attempt <= maxRetries) {
+          await new Promise((r) => setTimeout(r, 2000 * attempt));
+        }
+      }
+    }
+    throw lastError;
   }
 
   private extractLocalId(cardId: string, setId: string): string {
