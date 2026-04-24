@@ -1,3 +1,5 @@
+// Public login page — submits credentials to AuthContext.login() which stores tokens
+// and decodes the user from the JWT; redirects to "/" on success.
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';

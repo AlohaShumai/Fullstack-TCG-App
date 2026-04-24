@@ -1,3 +1,6 @@
+// Deck builder page — two-panel layout: left = card browser (All Cards or My Collections),
+// right = deck contents grouped by supertype (Pokémon / Trainer / Energy).
+// Clicking a card in the left panel adds one copy to the deck; +/− buttons adjust quantity in the right panel.
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../services/api';
@@ -71,19 +74,24 @@ export default function DeckDetail() {
 
   const CARDS_PER_PAGE = 30;
 
-  // Collapsible deck sections
+  // Each supertype section (Pokémon / Trainer / Energy) can be collapsed independently
+  // Collapsed state is a map of supertype name → boolean
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const toggleSection = (type: string) =>
     setCollapsed(prev => ({ ...prev, [type]: !prev[type] }));
 
+  // Height of each sticky section header in px — used to offset the `top` and `bottom`
+  // sticky positions so headers stack/unstack correctly when multiple sections are open
   const HEADER_H = 32;
 
-  // Collection filter state
+  // Collection filter state — lets the user filter the card browser to only show cards they own
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([]);
   const [cardSource, setCardSource] = useState<'all' | 'collections'>('all');
   const [showCollectionPicker, setShowCollectionPicker] = useState(false);
+  // When true, cards are hidden from the browser once deck quantity >= collection quantity
   const [respectCollectionQty, setRespectCollectionQty] = useState(false);
+  // Map of cardId → total owned quantity across all selected collections
   const [collectionQuantities, setCollectionQuantities] = useState<Record<string, number>>({});
 
   const fetchDeck = useCallback(async () => {
@@ -124,6 +132,9 @@ export default function DeckDetail() {
     }
   }, []);
 
+  // Fetches a page of cards from the global database.
+  // append=true is used for infinite scroll (not currently wired up) vs. page replace.
+  // Filters (format, search, type, set) are sent as query params so filtering happens server-side.
   const fetchAllCards = useCallback(async (page = 1, append = false) => {
     if (!deck) return;
     try {
@@ -164,6 +175,9 @@ export default function DeckDetail() {
     }
   }, [deck, search, typeFilter, energyTypeFilter, setFilter]);
 
+  // Fetches cards from the user's selected collections and merges them into one de-duplicated list.
+  // Quantities from multiple collections are summed so the "Limit by collection qty" toggle works correctly.
+  // Client-side filtering is applied here because collection data is already loaded in memory.
   const fetchCollectionCards = useCallback(async () => {
     if (selectedCollectionIds.length === 0) {
       setAllCards([]);
@@ -239,6 +253,8 @@ export default function DeckDetail() {
     return deckCard?.quantity || 0;
   };
 
+  // Adds one copy of a card to the deck.
+  // When "Limit by collection qty" is on, blocks the add if the user has already put all owned copies in the deck.
   const addCardToDeck = async (cardId: string, cardName: string) => {
     setError('');
     if (respectCollectionQty && cardSource === 'collections') {
@@ -292,6 +308,7 @@ export default function DeckDetail() {
     }
   };
 
+  // Shows a brief success bubble at the bottom of the screen, auto-dismisses after 2s
   const showMessage = (msg: string) => {
     setMessage(msg);
     setTimeout(() => setMessage(''), 2000);

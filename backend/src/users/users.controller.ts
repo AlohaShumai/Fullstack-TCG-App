@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateUsernameDto, UpdatePasswordDto } from './dto/users.dto';
 import type { AuthRequest } from '../common/types';
 
+// All routes here are under /users and require a valid access token.
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
@@ -24,11 +25,14 @@ export class UsersController {
     private collectionsService: CollectionsService,
   ) {}
 
+  // IMPORTANT: 'me/portfolio' must be declared before 'me' so NestJS doesn't
+  // try to match the literal string "portfolio" as a dynamic :id segment.
   @Get('me/portfolio')
   async getMyPortfolio(@Request() req: AuthRequest) {
     return this.collectionsService.getUserPortfolio(req.user.id);
   }
 
+  // Returns the profile without sensitive fields (password hash, refresh token hash)
   @Get('me')
   async getMe(@Request() req: AuthRequest) {
     const user = await this.usersService.findById(req.user.id);

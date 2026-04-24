@@ -20,11 +20,15 @@ import {
 } from './dto/deck.dto';
 import type { AuthRequest } from '../common/types';
 
+// All deck routes require login — decks are private per user.
+// Routes with :deckId always verify ownership inside DecksService.getDeckById().
 @Controller('decks')
 @UseGuards(JwtAuthGuard)
 export class DecksController {
   constructor(private decksService: DecksService) {}
 
+  // POST /decks/import — parse a PTCGL-format deck list and create the deck in one step
+  // Must come BEFORE the generic POST /decks to avoid route ambiguity
   @Post('import')
   async importDeck(@Request() req: AuthRequest, @Body() dto: ImportDeckDto) {
     return this.decksService.importDeck(
@@ -35,6 +39,7 @@ export class DecksController {
     );
   }
 
+  // POST /decks — create a new blank deck
   @Post()
   async createDeck(@Request() req: AuthRequest, @Body() dto: CreateDeckDto) {
     return this.decksService.createDeck(
@@ -44,11 +49,13 @@ export class DecksController {
     );
   }
 
+  // GET /decks — list all decks for the logged-in user, sorted by creation date
   @Get()
   async getUserDecks(@Request() req: AuthRequest) {
     return this.decksService.getUserDecks(req.user.id);
   }
 
+  // GET /decks/:id — fetch a single deck with all its cards
   @Get(':deckId')
   async getDeckById(
     @Request() req: AuthRequest,
@@ -57,6 +64,7 @@ export class DecksController {
     return this.decksService.getDeckById(req.user.id, deckId);
   }
 
+  // GET /decks/:id/validate — check 60-card limit, 4-copy rule, and format legality
   @Get(':deckId/validate')
   async validateDeck(
     @Request() req: AuthRequest,
@@ -65,6 +73,7 @@ export class DecksController {
     return this.decksService.validateDeck(req.user.id, deckId);
   }
 
+  // PATCH /decks/:id — rename or change format (format change validates existing cards)
   @Patch(':deckId')
   async updateDeck(
     @Request() req: AuthRequest,
@@ -77,6 +86,7 @@ export class DecksController {
     });
   }
 
+  // DELETE /decks/:id — permanently delete the deck and its cards
   @Delete(':deckId')
   async deleteDeck(
     @Request() req: AuthRequest,
@@ -85,6 +95,7 @@ export class DecksController {
     return this.decksService.deleteDeck(req.user.id, deckId);
   }
 
+  // POST /decks/:id/cards — add copies of a card (enforces 60-card and 4-copy rules)
   @Post(':deckId/cards')
   async addCardToDeck(
     @Request() req: AuthRequest,
@@ -99,6 +110,7 @@ export class DecksController {
     );
   }
 
+  // PATCH /decks/:id/cards/:cardId — set an exact copy count; quantity=0 removes the card
   @Patch(':deckId/cards/:cardId')
   async updateDeckCard(
     @Request() req: AuthRequest,
@@ -114,6 +126,7 @@ export class DecksController {
     );
   }
 
+  // DELETE /decks/:id/cards/:cardId — remove a card from the deck entirely
   @Delete(':deckId/cards/:cardId')
   async removeCardFromDeck(
     @Request() req: AuthRequest,

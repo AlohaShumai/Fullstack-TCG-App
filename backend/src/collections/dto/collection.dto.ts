@@ -1,5 +1,6 @@
 import { IsString, IsInt, IsBoolean, IsOptional, Min } from 'class-validator';
 
+// POST /collections — create a new collection for the logged-in user
 export class CreateCollectionDto {
   @IsString()
   name: string;
@@ -10,9 +11,10 @@ export class CreateCollectionDto {
 
   @IsOptional()
   @IsBoolean()
-  isPublic?: boolean;
+  isPublic?: boolean; // public collections can be viewed by anyone with the link
 }
 
+// PATCH /collections/:id — partial update; all fields optional so the caller can change just the name, just isPublic, etc.
 export class PatchCollectionDto {
   @IsOptional()
   @IsString()
@@ -27,6 +29,7 @@ export class PatchCollectionDto {
   isPublic?: boolean;
 }
 
+// POST /collections/:id/cards — add a card (defaults to quantity 1 if omitted)
 export class AddToCollectionDto {
   @IsString()
   cardId: string;
@@ -37,6 +40,7 @@ export class AddToCollectionDto {
   quantity?: number;
 }
 
+// PATCH /collections/:id/cards/:cardId — set an exact quantity; quantity=0 removes the card entirely
 export class UpdateCollectionDto {
   @IsInt()
   @Min(0)

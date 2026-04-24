@@ -1,3 +1,5 @@
+// Main landing page after login — shows collection stats, portfolio value chart,
+// TCG news, upcoming events, quick links, featured card, deck progress, and an AI tip.
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -74,6 +76,7 @@ export default function Dashboard() {
   const [featuredIndex, setFeaturedIndex] = useState(0);
   const [featuredFade, setFeaturedFade] = useState(true);
 
+  // Trigger CSS entry animation on mount (opacity + translateY)
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
   }, []);
@@ -113,7 +116,7 @@ export default function Dashboard() {
   }, [news.length]);
 
   useEffect(() => {
-
+    // Fire all dashboard fetches independently so one failure doesn't block the others
     api.get('/users/me/portfolio')
       .then((res) => setPortfolio(res.data))
       .catch(() => {})
@@ -148,6 +151,7 @@ export default function Dashboard() {
     ? stats.cardsByType.pokemon + stats.cardsByType.trainer + stats.cardsByType.energy
     : 0;
 
+  // Returns a percentage string for the collection breakdown bar chart
   const typeBarPct = (count: number) =>
     totalTypeCards > 0 ? `${Math.round((count / totalTypeCards) * 100)}%` : '0%';
 

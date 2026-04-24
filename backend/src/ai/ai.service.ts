@@ -129,6 +129,7 @@ export class AiService {
     }
   }
 
+  // Searches TCG community sites via Tavily; returns formatted results or null if unavailable
   private async searchWebForMeta(query: string): Promise<string | null> {
     if (!this.tavilyClient) return null;
 
@@ -156,6 +157,7 @@ export class AiService {
     }
   }
 
+  // Converts a card object into a plain text description for use as an embedding input or AI prompt context
   private cardToText(card: CardData): string {
     const parts = [
       `${card.name} is a ${card.supertype}`,
@@ -194,6 +196,8 @@ export class AiService {
     return parts.filter(Boolean).join('. ');
   }
 
+  // Calls OpenAI's embedding model to convert text → a 1536-dimensional vector.
+  // These vectors are stored in Postgres (pgvector) and used for semantic search.
   async generateEmbedding(text: string): Promise<number[]> {
     const response = await this.openai.embeddings.create({
       model: 'text-embedding-3-small',
@@ -233,6 +237,8 @@ export class AiService {
     return { embedded, failed };
   }
 
+  // Semantic (vector) search first; falls back to plain text LIKE search if no embeddings exist.
+  // The <=> operator is pgvector's cosine distance — lower value = more similar.
   async searchCardsByQuery(
     query: string,
     limit = 20,
@@ -325,6 +331,10 @@ export class AiService {
     return cardMap;
   }
 
+  // Main chat handler. Builds a system prompt that includes the user's full collection,
+  // current format info, and meta deck data. Gives GPT a 'search_web' tool it can call
+  // when it needs live data (meta, tournament results, deck lists). Two-pass pattern:
+  // first call → if GPT calls a tool, execute it → second call with tool results.
   async chat(
     userId: string,
     message: string,

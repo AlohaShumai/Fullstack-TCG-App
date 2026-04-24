@@ -59,6 +59,7 @@ interface CardLegalities {
 export class DecksService {
   constructor(private prisma: PrismaService) {}
 
+  // Basic Energy is exempt from the 4-copy rule — you can run as many copies as you want
   private isBasicEnergy(card: {
     supertype: string;
     subtypes: string[];
@@ -66,6 +67,9 @@ export class DecksService {
     return card.supertype === 'Energy' && card.subtypes.includes('Basic');
   }
 
+  // Checks if a card is playable in the given format.
+  // Uses rotation.config.ts (our maintained list) rather than the legalities field stored on the card,
+  // because TCGdex legality data can lag behind official rotation announcements.
   private isCardLegalInFormat(
     card: { setName: string; id: string; legalities?: CardLegalities | null },
     format: string,
@@ -80,6 +84,7 @@ export class DecksService {
     return true;
   }
 
+  // Creates a new empty deck — cards are added afterward via addCardToDeck
   async createDeck(userId: string, name: string, format: string = 'unlimited') {
     return this.prisma.deck.create({
       data: {
@@ -95,6 +100,7 @@ export class DecksService {
     });
   }
 
+  // Returns all decks for a user with full card lists, ordered newest first
   async getUserDecks(userId: string) {
     return this.prisma.deck.findMany({
       where: { userId },
@@ -107,6 +113,8 @@ export class DecksService {
     });
   }
 
+  // Fetches a deck and verifies ownership.
+  // Returns NotFoundException (not ForbiddenException) even on wrong owner to avoid leaking that the deck exists.
   async getDeckById(userId: string, deckId: string) {
     const deck = await this.prisma.deck.findUnique({
       where: { id: deckId },
@@ -128,6 +136,9 @@ export class DecksService {
     return deck;
   }
 
+  // Updates deck name and/or format.
+  // Changing format to 'standard' is rejected if any existing card is no longer Standard-legal —
+  // the user must remove non-legal cards before the format change is allowed.
   async updateDeck(
     userId: string,
     deckId: string,
@@ -176,6 +187,12 @@ export class DecksService {
     return { message: 'Deck deleted' };
   }
 
+  // Adds copies of a card to the deck, enforcing all official rules:
+  // 1. Card must exist in our database
+  // 2. Card must be legal in the deck's format
+  // 3. Total deck size must stay ≤ 60
+  // 4. Non-basic Energy copies per card must stay ≤ 4
+  // Uses upsert so repeatedly clicking "add" increments quantity rather than creating duplicate rows.
   async addCardToDeck(
     userId: string,
     deckId: string,
@@ -244,6 +261,8 @@ export class DecksService {
     });
   }
 
+  // Sets an exact quantity for a card in the deck.
+  // quantity=0 deletes the row rather than leaving a zero-count entry.
   async updateDeckCard(
     userId: string,
     deckId: string,
@@ -315,6 +334,11 @@ export class DecksService {
     return { message: 'Card removed from deck' };
   }
 
+  // Parses a PTCGL/PTCGO deck export into structured entries.
+  // Supports three line formats:
+  //   Section header: "Pokémon: 14" — skipped
+  //   Basic energy:   "9 Basic Fire Energy" — matched without a set code
+  //   Normal card:    "4 Charizard ex OBF 125" — quantity, name, set abbreviation, collector number
   parseDeckList(deckList: string): ParsedEntry[] {
     const headerPattern = /^(Pok[eé]mon|Trainer|Energy):\s*\d+/i;
     const basicEnergyPattern = /^(\d+)\s+Basic\s+(\w+)\s+Energy\s*$/i;
@@ -349,6 +373,10 @@ export class DecksService {
     return entries;
   }
 
+  // Creates a deck from a raw deck-list string.
+  // Returns the created deck plus two arrays:
+  //   notFound — cards that couldn't be resolved to a DB record
+  //   warnings — rule violations (non-standard cards, too many copies, >60 total) noted but not blocking
   async importDeck(
     userId: string,
     name: string,
@@ -405,6 +433,10 @@ export class DecksService {
     return { deck: finalDeck, notFound, warnings };
   }
 
+  // Tries three strategies in order to match a parsed deck-list entry to a DB card:
+  //   1. Exact: translate the PTCGL set code to a TCGdex set ID, then look up "{setId}-{setNumber}"
+  //   2. Fallback: name match + collector number suffix (handles codes not in SET_CODE_MAP)
+  //   3. Last resort: name-only match (used for Basic Energy which has no set code)
   private async resolveCard(entry: ParsedEntry) {
     // Exact lookup: setCode → setId → card ID "{setId}-{setNumber}"
     if (entry.setCode && entry.setNumber) {
@@ -432,6 +464,9 @@ export class DecksService {
     });
   }
 
+  // Full rules validation for a deck. Returns { valid, format, totalCards, errors, warnings }.
+  // Errors block competitive play; warnings are advisory (no warnings currently generated).
+  // Rules checked: exactly 60 cards, at least 1 Basic Pokémon, ≤4 copies of non-basic Energy, format legality.
   async validateDeck(userId: string, deckId: string) {
     const deck = await this.getDeckById(userId, deckId);
 

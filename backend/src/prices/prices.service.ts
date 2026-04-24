@@ -53,6 +53,7 @@ export class PricesService {
     }
   }
 
+  // Runs nightly to refresh all card prices and record a new PriceSnapshot for each card
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleDailyPriceSync() {
     this.logger.log('Starting scheduled price sync...');
@@ -60,6 +61,7 @@ export class PricesService {
     this.logger.log('Scheduled price sync completed');
   }
 
+  // Iterates every distinct set in our DB and fetches current prices from pokemontcg.io
   async syncAllPrices(): Promise<{ synced: number; skipped: number }> {
     let synced = 0;
     let skipped = 0;
@@ -247,6 +249,8 @@ export class PricesService {
     return map;
   }
 
+  // Updates the single current-price row (CardPrice) and appends a historical snapshot (PriceSnapshot).
+  // CardPrice holds the latest price; PriceSnapshot accumulates one row per sync per card.
   private async upsertCardPrice(
     cardId: string,
     apiCard: PokemonTcgCard,
@@ -261,6 +265,7 @@ export class PricesService {
       update: { marketPrice, lowPrice, midPrice, highPrice, tcgplayerUrl },
     });
 
+    // Only snapshot when we have a real price — avoids polluting history with nulls
     if (marketPrice !== null) {
       await this.prisma.priceSnapshot.create({
         data: { cardId, marketPrice },
@@ -268,6 +273,9 @@ export class PricesService {
     }
   }
 
+  // Picks the most relevant price variant from TCGPlayer's data.
+  // Cards can have multiple variants (normal, holofoil, etc.); we prefer 'normal' first,
+  // then holo variants in order of rarity, then fall back to whatever key exists.
   private extractPrices(apiCard: PokemonTcgCard): {
     marketPrice: number | null;
     lowPrice: number | null;

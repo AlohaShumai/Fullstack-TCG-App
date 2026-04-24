@@ -27,11 +27,13 @@ const INITIAL_MESSAGE: Message = {
   ],
 };
 
+// Key used to persist chat history in localStorage so conversations survive page refreshes
 const STORAGE_KEY = 'professorAiChatHistory';
 
 const ChatContext = createContext<ChatContextType | null>(null);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
+  // Lazy initializer reads saved history from localStorage on first render
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -41,6 +43,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   });
   const [loading, setLoading] = useState(false);
+  // loadingStatus switches to "Searching the web..." after 3s to reflect AI tool use
   const [loadingStatus, setLoadingStatus] = useState('Thinking...');
 
   useEffect(() => {

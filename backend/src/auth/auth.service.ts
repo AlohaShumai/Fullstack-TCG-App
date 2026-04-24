@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
 
+// Standard JWT payload fields. 'sub' is the JWT spec's name for the subject (user ID).
 interface TokenPayload {
   sub: string;
   email: string;
@@ -29,6 +30,7 @@ export class AuthService {
     password: string,
     username: string,
   ): Promise<Tokens> {
+    // Guard against duplicate email or username before creating the user
     const existingUser = await this.usersService.findByEmail(email);
     if (existingUser) {
       throw new UnauthorizedException('Email already registered');
@@ -47,6 +49,7 @@ export class AuthService {
       username: user.username,
     });
 
+    // Store a bcrypt hash of the refresh token so raw tokens are never saved in the DB
     await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
     return tokens;
   }
@@ -54,6 +57,7 @@ export class AuthService {
   async login(email: string, password: string): Promise<Tokens> {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
+      // Return same message as wrong password to avoid leaking whether the email exists
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -79,6 +83,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
+    // Compare the incoming raw token against the stored hash
     const tokenValid = await bcrypt.compare(refreshToken, user.refreshToken);
     if (!tokenValid) {
       throw new UnauthorizedException('Invalid refresh token');
@@ -95,10 +100,13 @@ export class AuthService {
     return tokens;
   }
 
+  // Logout: wipe the stored refresh token so it can't be reused
   async logout(userId: string): Promise<void> {
     await this.usersService.updateRefreshToken(userId, null);
   }
 
+  // Issues two tokens: a short-lived access token (15 min) and a long-lived refresh token (7 days).
+  // Both are signed JWTs but with different secrets and TTLs.
   private async generateTokens(payload: TokenPayload): Promise<Tokens> {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {

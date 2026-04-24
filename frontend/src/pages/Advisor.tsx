@@ -1,3 +1,5 @@
+// Full-page AI chat with Professor AI — shares chat state with FloatingChat via ChatContext
+// so the conversation persists when the user toggles between the panel and this page.
 import { useRef, useEffect, useState } from 'react';
 import { useChat } from '../context/ChatContext';
 
@@ -10,6 +12,7 @@ export default function Advisor() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Optional text param lets suggestion chips send a message directly without typing
   const handleSend = (text?: string) => {
     const message = text ?? input.trim();
     if (!message || loading) return;
@@ -56,6 +59,7 @@ export default function Advisor() {
                   <p className="whitespace-pre-wrap text-sm sm:text-base">{msg.content}</p>
                 </div>
 
+                {/* Source attribution: 'web' means Tavily search was used */}
                 {msg.sources && msg.sources.length > 0 && (
                   <div className="mt-1 mb-1">
                     {msg.sources.includes('web') ? (

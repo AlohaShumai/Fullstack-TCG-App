@@ -11,6 +11,9 @@ interface JwtPayload {
   username: string;
 }
 
+// Validates the short-lived access token on every protected request.
+// Passport calls validate() after verifying the JWT signature; whatever
+// this returns gets attached to req.user for the rest of the request lifecycle.
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
@@ -28,6 +31,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
   }
 
+  // DB lookup ensures deleted accounts are immediately rejected even with a valid token
   async validate(payload: JwtPayload) {
     const user = await this.usersService.findById(payload.sub);
     if (!user) {

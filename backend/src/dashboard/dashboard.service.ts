@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { tavily, TavilyClient } from '@tavily/core';
 import OpenAI from 'openai';
 
+// News and events are cached for 24 hours — Tavily searches are slow and have a usage cost
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export interface NewsArticle {
@@ -75,6 +76,8 @@ export class DashboardService {
     });
   }
 
+  // Uses GPT-4o-mini to compress raw Tavily article text into 2-3 sentence summaries.
+  // Falls back to raw content if the AI call fails.
   private async summarizeArticles(
     articles: Array<{ title: string; content: string }>,
   ): Promise<string[]> {
@@ -113,6 +116,8 @@ export class DashboardService {
     }
   }
 
+  // Gathers all dashboard stat cards in one round trip using Promise.all.
+  // Featured cards are randomly selected from the user's collection for the rotating showcase.
   async getStats(userId: string): Promise<DashboardStats> {
     const [collectionsCount, decksCount, collectionCards, decks, cardCount] =
       await Promise.all([

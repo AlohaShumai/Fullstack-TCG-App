@@ -18,6 +18,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+// Decodes the JWT payload (middle segment, base64-encoded JSON) without verifying the signature.
+// Verification happens on the server; we just need the user info for UI purposes.
 function decodeUser(token: string): User | null {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
@@ -32,11 +34,13 @@ function decodeUser(token: string): User | null {
   }
 }
 
+// Runs once on page load — restores the session from localStorage without an API call
 function getInitialUser(): User | null {
   const token = localStorage.getItem('accessToken');
   if (token) {
     const user = decodeUser(token);
     if (user) return user;
+    // Token was malformed — clear it so the user isn't stuck in a broken state
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
   }

@@ -1,7 +1,10 @@
+// Public registration page — validates username/password client-side before
+// calling AuthContext.register(); the backend also validates via class-validator DTOs.
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+// Mirrors the username rules enforced by the backend DTO (3-20 chars, alphanumeric + underscore)
 function validateUsername(value: string): string {
   if (value.length < 3) return 'Must be at least 3 characters';
   if (value.length > 20) return 'Must be at most 20 characters';

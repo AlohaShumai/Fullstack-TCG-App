@@ -1,3 +1,5 @@
+// Collection management page — lets users create/edit/delete collections,
+// view cards they own with quantity controls, and see the portfolio value chart.
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
@@ -66,6 +68,7 @@ export default function CollectionPage() {
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
 
+  // On first load, fetch the list and auto-select the first collection
   const fetchCollections = useCallback(async () => {
     try {
       const response = await api.get('/collections');

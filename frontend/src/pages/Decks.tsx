@@ -1,3 +1,5 @@
+// Deck list page — shows all of the user's decks, lets them create blank decks or import from a PTCGL list.
+// Clicking "Edit Deck" navigates to DeckDetail which has the full card browser + deck builder UI.
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
@@ -39,6 +41,7 @@ export default function Decks() {
   const [importing, setImporting] = useState(false);
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
 
+  // Displays a toast notification at the bottom of the screen; errors stay longer (4s vs 2.5s)
   const showNotification = (msg: string, isError = false) => {
     setNotification(msg);
     setNotifError(isError);
@@ -93,6 +96,7 @@ export default function Decks() {
         deckList: importList,
       });
       const { deck, notFound, warnings } = response.data;
+      // Merge server warnings and unresolved cards into a single warning list shown to the user
       const allWarnings = [
         ...warnings,
         ...notFound.map((c: string) => `Not found: ${c}`),
@@ -113,6 +117,7 @@ export default function Decks() {
     }
   };
 
+  // Sums all card quantities in a deck for the progress bar and "X / 60" label
   const getTotalCards = (deck: Deck) => {
     return deck.cards.reduce((sum, card) => sum + card.quantity, 0);
   };
@@ -260,6 +265,7 @@ export default function Decks() {
                     </span>
                   </div>
 
+                  {/* Progress bar turns green when deck reaches exactly 60 cards */}
                   <div className="mb-4">
                     <div className="flex justify-between text-sm mb-1">
                       <span className="text-slate-400">Cards</span>

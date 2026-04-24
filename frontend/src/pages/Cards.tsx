@@ -1,3 +1,6 @@
+// Card browser page — paginated grid of all cards with filters for format, type, supertype, and set.
+// Clicking a card opens a detail modal with stats, price history chart, and an "Add to Collection" button.
+// The collection picker modal handles single-collection, multi-collection, and no-collection scenarios.
 import { useState, useEffect, useRef, type MouseEvent } from 'react';
 import {
   LineChart,
@@ -100,9 +103,10 @@ export default function Cards() {
   const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
   const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
 
-  // Collection picker state
+  // Collection picker state — used when the user clicks "+ Add" on a card in the grid
   const [showCollectionPicker, setShowCollectionPicker] = useState(false);
   const [collections, setCollections] = useState<{ id: string; name: string }[]>([]);
+  // pendingCard is stored so the modal knows which card to add after the user selects a collection
   const [pendingCard, setPendingCard] = useState<{ id: string; name: string } | null>(null);
   const [isErrorMessage, setIsErrorMessage] = useState(false);
 
@@ -126,6 +130,7 @@ export default function Cards() {
     fetchRotationInfo();
   }, []);
 
+  // Debounce the search input by 300ms so we don't fire an API request on every keystroke
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => setDebouncedSearch(search), 300);
@@ -135,6 +140,8 @@ export default function Cards() {
     fetchCards(1, debouncedSearch, typeFilter, supertypeFilter, setFilter, formatFilter);
   }, [debouncedSearch, typeFilter, supertypeFilter, setFilter, formatFilter]);
 
+  // When a card is selected (modal opens), fetch its full price data and 30-day price history in parallel.
+  // The grid card objects don't carry price data to keep the list fetch fast, so we pull it on demand here.
   useEffect(() => {
     if (!selectedCard) {
       setPriceHistory([]);
@@ -202,6 +209,11 @@ export default function Cards() {
     }
   };
 
+  // Smart "add to collection" handler with three paths:
+  //   0 collections → show create-collection form inside the picker modal
+  //   1 collection  → add directly without showing any modal (fast path)
+  //   2+ collections → show the collection picker so the user can choose
+  // e.stopPropagation() prevents the click from also opening the card detail modal
   const addToCollection = async (
     cardId: string,
     cardName: string,
@@ -312,6 +324,7 @@ export default function Cards() {
     return card.legalities?.expanded === 'Legal';
   };
 
+  // When Standard filter is active, only show Standard-legal sets in the set dropdown
   const filteredSets =
     formatFilter === 'standard'
       ? allSets.filter((set) => set.standardLegal)
@@ -956,7 +969,8 @@ export default function Cards() {
   );
 }
 
-// Collection Picker Modal Component
+// Separate component so it can manage its own selected IDs and per-collection quantities
+// without polluting the parent Cards component's state.
 function CollectionPickerModal({
   collections,
   cardName,
@@ -975,6 +989,7 @@ function CollectionPickerModal({
   const [showCreateForm, setShowCreateForm] = useState(collections.length === 0);
   const [newName, setNewName] = useState('');
 
+  // Toggle a collection's selection and initialize its quantity to 1 if not already set
   const toggleCollection = (id: string) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
@@ -995,7 +1010,7 @@ function CollectionPickerModal({
     });
   };
 
-  // If no collections, show create form
+  // If the user has no collections at all, skip the picker and go straight to the create form
   if (showCreateForm || collections.length === 0) {
     return (
       <div

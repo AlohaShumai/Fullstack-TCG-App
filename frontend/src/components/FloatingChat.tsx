@@ -13,6 +13,7 @@ export default function FloatingChat() {
   const isResizing = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Hide on the full Advisor page (has its own chat UI) and on auth pages
   const hidden = ['/advisor', '/login', '/register'].includes(location.pathname);
 
   useEffect(() => {
@@ -36,6 +37,8 @@ export default function FloatingChat() {
     }
   };
 
+  // Drag-to-resize handler — attaches mousemove/mouseup to window so the drag
+  // continues even if the cursor leaves the drag handle element
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
     isResizing.current = true;
@@ -46,6 +49,7 @@ export default function FloatingChat() {
 
     const onMouseMove = (e: MouseEvent) => {
       if (!isResizing.current) return;
+      // Panel grows left/up as the handle is dragged top-left; clamp to min/max bounds
       const newWidth = Math.max(280, Math.min(700, startWidth - (e.clientX - startX)));
       const newHeight = Math.max(300, Math.min(820, startHeight - (e.clientY - startY)));
       setPanelSize({ width: newWidth, height: newHeight });

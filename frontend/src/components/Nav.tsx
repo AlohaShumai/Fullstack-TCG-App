@@ -13,17 +13,21 @@ const NAV_LINKS = [
 export default function Nav() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  // refs to each <a> element so we can read their offsetLeft/offsetWidth for the pill
   const linkRefs = useRef<(HTMLAnchorElement | null)[]>([]);
   const didMount = useRef(false);
 
   const [pillStyle, setPillStyle] = useState({ left: 0, width: 0 });
   const [pillVisible, setPillVisible] = useState(false);
+  // Delayed to prevent the pill from animating on first paint (looks like a flash)
   const [pillAnimate, setPillAnimate] = useState(false);
 
   const activeIndex = NAV_LINKS.findIndex((l) =>
     l.path === '/' ? location.pathname === '/' : location.pathname.startsWith(l.path)
   );
 
+  // useLayoutEffect runs synchronously after DOM mutations but before the browser paints,
+  // ensuring the pill is in the right position without a visible flash.
   useLayoutEffect(() => {
     const el = linkRefs.current[activeIndex];
     if (!el) return;
@@ -31,14 +35,14 @@ export default function Nav() {
     const pos = { left: el.offsetLeft, width: el.offsetWidth };
 
     if (!didMount.current) {
-      // First render: snap pill to correct position before paint, no animation
+      // First render: snap pill to position with no CSS transition
       didMount.current = true;
       setPillStyle(pos);
       setPillVisible(true);
-      // After the first frame is painted, enable animation for future clicks
+      // Enable the slide animation after the first frame so clicks animate smoothly
       requestAnimationFrame(() => setPillAnimate(true));
     } else {
-      // Subsequent route changes: slide to new position
+      // Route change: slide the pill to the new active link
       setPillStyle(pos);
     }
   }, [activeIndex]);

@@ -11,6 +11,9 @@ interface JwtPayload {
   username: string;
 }
 
+// Validates the long-lived refresh token (used only on POST /auth/refresh).
+// passReqToCallback: true lets validate() receive the raw request so it can
+// extract the token string and pass it to AuthService for bcrypt comparison.
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(
   Strategy,
@@ -34,6 +37,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
     if (!authHeader) {
       throw new UnauthorizedException();
     }
+    // Attach the raw refresh token so AuthService can bcrypt.compare it against the DB hash
     const refreshToken = authHeader.replace('Bearer ', '').trim();
     return {
       id: payload.sub,

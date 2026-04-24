@@ -1,9 +1,13 @@
 import { IsEmail, IsString, MinLength, MaxLength, Matches } from 'class-validator';
 
+// DTOs (Data Transfer Objects) define the shape of request bodies.
+// The class-validator decorators are enforced automatically by the global ValidationPipe in main.ts.
+
 export class RegisterDto {
   @IsEmail()
   email: string;
 
+  // Letters, numbers, underscores only — enforced both here and in UsersService
   @IsString()
   @MinLength(3)
   @MaxLength(20)

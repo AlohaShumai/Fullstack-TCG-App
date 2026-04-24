@@ -82,6 +82,7 @@ export class CardsService {
       'https://api.tcgdex.net/v2/en';
   }
 
+  // Runs automatically every night at midnight to keep card data fresh
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleDailySync() {
     this.logger.log('Starting scheduled card sync...');
@@ -232,6 +233,8 @@ export class CardsService {
     return { synced: totalSynced };
   }
 
+  // Converts a TCGdex API card into our DB schema and inserts or updates it.
+  // 'upsert' means: insert if the card ID doesn't exist, update if it does.
   private async upsertCardFromTCGdex(
     card: TCGdexCard,
     setId: string,
@@ -358,6 +361,9 @@ export class CardsService {
     return value as Prisma.InputJsonValue;
   }
 
+  // Paginated card browser with optional filters (type, set, format, search).
+  // Search uses a two-pass approach: "starts with" results rank above "contains" results
+  // so that typing "Char" shows Charizard before "Mega Charizard".
   async getCards(filters: {
     page?: number;
     limit?: number;
@@ -382,6 +388,7 @@ export class CardsService {
       baseWhere.setName = filters.set;
     }
     if (filters.format === 'standard') {
+      // JSON path query on the legalities JSON column
       baseWhere.legalities = {
         path: ['standard'],
         equals: 'Legal',
@@ -462,6 +469,7 @@ export class CardsService {
     });
   }
 
+  // Returns the last 90 days of market price snapshots for a single card (used in card detail modal)
   async getCardPriceHistory(cardId: string) {
     const since = new Date();
     since.setDate(since.getDate() - 90);

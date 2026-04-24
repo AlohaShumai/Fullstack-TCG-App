@@ -13,17 +13,20 @@ import Profile from './pages/Profile';
 import FloatingChat from './components/FloatingChat';
 import Nav from './components/Nav';
 
+// Redirects unauthenticated users to /login; logged-in users proceed normally
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   return user ? children : <Navigate to="/login" />;
 }
 
+// Redirects already-logged-in users away from /login and /register
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   return user ? <Navigate to="/" /> : children;
 }
 
-// Persistent layout — Nav mounts once and never re-mounts on navigation
+// Persistent layout — Nav mounts once and never re-mounts on navigation.
+// key={location.pathname} on the inner div triggers the CSS entry animation on each page change.
 function AppLayout() {
   const location = useLocation();
   return (

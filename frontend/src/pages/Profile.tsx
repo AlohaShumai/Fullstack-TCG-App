@@ -1,3 +1,5 @@
+// Profile settings page — lets users change their username, update their password, and delete their account.
+// Account deletion requires typing the username as a confirmation to prevent accidental deletes.
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
@@ -11,6 +13,8 @@ interface ProfileData {
   createdAt: string;
 }
 
+// Client-side username validation — mirrors the constraints on UpdateUsernameDto in the backend
+// so the user sees an error immediately rather than waiting for a round trip
 function validateUsername(value: string): string {
   if (value.length < 3) return 'Must be at least 3 characters';
   if (value.length > 20) return 'Must be at most 20 characters';
@@ -79,6 +83,7 @@ export default function Profile() {
     try {
       const res = await api.patch('/users/me', { username: newUsername });
       setProfile(res.data);
+      // Also update the username in AuthContext so the Nav bar reflects the change immediately
       updateUser({ username: newUsername });
       setShowEditUsernameModal(false);
       showNotification('Username updated!');
@@ -120,6 +125,8 @@ export default function Profile() {
     }
   };
 
+  // Permanently deletes the account and all associated data, then logs out and redirects.
+  // The username-match guard is checked both here (defensive) and in the button's disabled prop (UX).
   const handleDeleteAccount = async () => {
     if (deleteConfirmText !== profile?.username) return;
     setDeleting(true);

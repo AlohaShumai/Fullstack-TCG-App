@@ -1,5 +1,7 @@
 import { IsString, MinLength, MaxLength, Matches } from 'class-validator';
 
+// PATCH /users/me — update the logged-in user's display name
+// Regex enforces alphanumeric + underscores only (no spaces, special chars, or profanity escapes)
 export class UpdateUsernameDto {
   @IsString()
   @MinLength(3)
@@ -10,6 +12,8 @@ export class UpdateUsernameDto {
   username: string;
 }
 
+// PATCH /users/me/password — requires the current password to prevent account takeover
+// if the user's session is compromised but they haven't changed the password yet
 export class UpdatePasswordDto {
   @IsString()
   currentPassword: string;

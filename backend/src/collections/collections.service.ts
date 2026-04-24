@@ -9,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export class CollectionsService {
   constructor(private prisma: PrismaService) {}
 
-  // Get all collections for a user
+  // Returns all collections with a card count badge (_count.cards) but not the full card list
   async getUserCollections(userId: string) {
     return this.prisma.collection.findMany({
       where: { userId },
@@ -22,7 +22,7 @@ export class CollectionsService {
     });
   }
 
-  // Get a specific collection with all its cards
+  // Fetches full card list. Public collections are readable by anyone (shared link support).
   async getCollection(userId: string, collectionId: string) {
     const collection = await this.prisma.collection.findFirst({
       where: {
@@ -110,7 +110,7 @@ export class CollectionsService {
     return { message: 'Collection deleted' };
   }
 
-  // Add a card to a collection
+  // Adds a card or increments its quantity if it's already in the collection (upsert)
   async addToCollection(
     userId: string,
     collectionId: string,
@@ -153,7 +153,7 @@ export class CollectionsService {
     });
   }
 
-  // Update card quantity in collection
+  // Sets quantity to an exact number; deletes the row if quantity drops to 0
   async updateCardQuantity(
     userId: string,
     collectionId: string,
@@ -267,6 +267,8 @@ export class CollectionsService {
     };
   }
 
+  // Current value = sum of (quantity × current market price) for every card in the collection.
+  // History = 30-day chart built from PriceSnapshot rows (one row per card per sync run).
   async getCollectionPortfolio(
     collectionId: string,
     userId: string,
@@ -296,6 +298,8 @@ export class CollectionsService {
     return { currentValue: Math.round(currentValue * 100) / 100, history };
   }
 
+  // Same as getCollectionPortfolio but sums across ALL of the user's collections.
+  // A card that appears in two collections is counted with combined quantity.
   async getUserPortfolio(
     userId: string,
   ): Promise<{ currentValue: number; history: { date: string; value: number }[] }> {
@@ -304,7 +308,7 @@ export class CollectionsService {
       include: { card: { include: { prices: true } } },
     });
 
-    // Aggregate quantities per unique card across all collections
+    // Merge duplicate card entries across collections into a single quantity per card
     const cardMap = new Map<string, { quantity: number; marketPrice: number | null }>();
     for (const cc of collectionCards) {
       const existing = cardMap.get(cc.cardId);
@@ -332,6 +336,10 @@ export class CollectionsService {
     return { currentValue: Math.round(currentValue * 100) / 100, history };
   }
 
+  // Builds a 30-day value chart from PriceSnapshot data.
+  // For each day, it uses the most recent snapshot taken ON or BEFORE that day
+  // (carry-forward pricing) so gaps don't cause missing data points.
+  // Fetches 35 days of snapshots to ensure day-0 has a carry-forward value.
   private async buildPortfolioHistory(
     cards: Array<{ cardId: string; quantity: number }>,
   ): Promise<Array<{ date: string; value: number }>> {
@@ -346,6 +354,7 @@ export class CollectionsService {
       orderBy: { capturedAt: 'asc' },
     });
 
+    // Group snapshots by cardId for O(1) lookup during the day loop
     const snapshotMap = new Map<
       string,
       Array<{ capturedAt: Date; marketPrice: number | null }>
@@ -359,12 +368,14 @@ export class CollectionsService {
     for (let daysAgo = 29; daysAgo >= 0; daysAgo--) {
       const day = new Date();
       day.setDate(day.getDate() - daysAgo);
+      // End-of-day timestamp so any snapshot taken that day counts as "on" that day
       day.setHours(23, 59, 59, 999);
 
       let dayValue = 0;
       for (const { cardId, quantity } of cards) {
         const cardSnaps = snapshotMap.get(cardId) ?? [];
         let latestPrice: number | null = null;
+        // Walk forward through sorted snapshots; last one <= day is the carry-forward price
         for (const s of cardSnaps) {
           if (s.capturedAt <= day && s.marketPrice !== null) {
             latestPrice = s.marketPrice;

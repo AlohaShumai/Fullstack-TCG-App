@@ -13,15 +13,18 @@ import { AiModule } from './ai/ai.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { PricesModule } from './prices/prices.module';
 
+// Root module — wires every feature module together.
+// NestJS reads this to know which controllers, services, and providers exist.
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
+    // Makes .env variables available everywhere via ConfigService (no need to re-import)
+    ConfigModule.forRoot({ isGlobal: true }),
+    // Rate-limiting: 'auth' bucket = 5 req/min, 'ai' bucket = 15 req/min
     ThrottlerModule.forRoot([
       { name: 'auth', ttl: 60000, limit: 5 },
       { name: 'ai', ttl: 60000, limit: 15 },
     ]),
+    // Enables @Cron() decorators (used for nightly card + price syncs)
     ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
